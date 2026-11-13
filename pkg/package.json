@@ -1,0 +1,17 @@
+{
+  "name": "turkish-grammar-map",
+  "type": "module",
+  "description": "Interactive radial mind-map of Turkish grammar, rendered on canvas from Rust/WASM",
+  "version": "0.1.0",
+  "license": "MIT",
+  "files": [
+    "turkish_grammar_map_bg.wasm",
+    "turkish_grammar_map.js",
+    "turkish_grammar_map.d.ts"
+  ],
+  "main": "turkish_grammar_map.js",
+  "types": "turkish_grammar_map.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

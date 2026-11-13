@@ -1,0 +1,48 @@
+# Türkçe Dilbilgisi — Turkish Grammar Map
+
+An interactive radial mind-map of Turkish grammar, written in Rust, compiled to WebAssembly and drawn on an HTML5 canvas.
+
+- 10 primary rings and 168 rules, each with a suffix formula, harmony notes, exceptions, a CEFR level and three example sentences
+- Click to expand or collapse branches, scroll to zoom at the cursor, drag to pan
+- Live search that expands the path to matching rules
+- Rule Inspector drawer with highlighted suffixes
+- Frequency dictionary of 200 verbs and 150 adjectives with its own search (ranking is approximate)
+
+## Run
+
+The compiled WebAssembly is committed in `pkg/`, so any static file server works:
+
+```bash
+python -m http.server 5173
+```
+
+Then open http://localhost:5173.
+
+## Build
+
+```bash
+rustup target add wasm32-unknown-unknown
+cargo install wasm-pack
+cargo test
+wasm-pack build --target web --release
+```
+
+On Windows, if the project sits in a very long path, set a short build directory first:
+
+```powershell
+$env:CARGO_TARGET_DIR = "$env:TEMP\tgm-target"
+```
+
+## Layout
+
+| File | Role |
+|---|---|
+| `src/grammar_data.rs` | The grammar tree. Add a rule with one `l(...)` call. |
+| `src/dictionary.rs` | Verb and adjective lists. Add a word with one tuple. |
+| `src/layout.rs` | Radial tree layout. |
+| `src/lib.rs` | State, camera, input, animation, search, rendering. |
+| `index.html`, `styles.css`, `main.js` | HUD, drawers and the WASM bootstrapper. |
+
+## Keys
+
+`/` search · `D` dictionary · `E` expand all · `C` collapse all · `0` reset camera · arrows pan · `+` / `-` zoom · `Esc` close

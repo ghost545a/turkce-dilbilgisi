@@ -1,0 +1,35 @@
+/* tslint:disable */
+/* eslint-disable */
+export const memory: WebAssembly.Memory;
+export const __wbg_app_free: (a: number, b: number) => void;
+export const app_clear_selection: (a: number) => void;
+export const app_collapse_all: (a: number) => void;
+export const app_dblclick: (a: number, b: number, c: number) => void;
+export const app_expand_all: (a: number) => void;
+export const app_focus: (a: number, b: number) => void;
+export const app_key: (a: number, b: number, c: number) => number;
+export const app_new: (a: any, b: any) => [number, number, number];
+export const app_node_count: (a: number) => number;
+export const app_node_json: (a: number, b: number) => [number, number];
+export const app_pointer_cancel: (a: number, b: number) => void;
+export const app_pointer_down: (a: number, b: number, c: number, d: number) => void;
+export const app_pointer_leave: (a: number) => void;
+export const app_pointer_move: (a: number, b: number, c: number, d: number) => number;
+export const app_pointer_up: (a: number, b: number, c: number, d: number) => void;
+export const app_reset_camera: (a: number) => void;
+export const app_resize: (a: number, b: number, c: number, d: number) => void;
+export const app_rule_id_by_title: (a: number, b: number, c: number) => number;
+export const app_search: (a: number, b: number, c: number) => number;
+export const app_start: (a: number) => [number, number];
+export const app_wheel: (a: number, b: number, c: number, d: number) => void;
+export const dict_search: (a: number, b: number, c: number, d: number) => [number, number];
+export const wasm_bindgen_221b4da4ce97537e___convert__closures_____invoke___f64______true_: (a: number, b: number, c: number) => void;
+export const __wbindgen_exn_store: (a: number) => void;
+export const __externref_table_alloc: () => number;
+export const __wbindgen_externrefs: WebAssembly.Table;
+export const __wbindgen_destroy_closure: (a: number, b: number) => void;
+export const __wbindgen_malloc: (a: number, b: number) => number;
+export const __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
+export const __wbindgen_free: (a: number, b: number, c: number) => void;
+export const __externref_table_dealloc: (a: number) => void;
+export const __wbindgen_start: () => void;

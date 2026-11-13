@@ -1,0 +1,37 @@
+[package]
+name = "turkish-grammar-map"
+version = "0.1.0"
+edition = "2021"
+description = "Interactive radial mind-map of Turkish grammar, rendered on canvas from Rust/WASM"
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wasm-bindgen = "0.2"
+js-sys = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[dependencies.web-sys]
+version = "0.3"
+features = [
+  "Window",
+  "Document",
+  "Element",
+  "HtmlElement",
+  "HtmlCanvasElement",
+  "CanvasRenderingContext2d",
+  "CanvasGradient",
+  "TextMetrics",
+]
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+
+# Skip the wasm-opt download step so the build works offline and on any Rust version.
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false

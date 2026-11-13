@@ -1,0 +1,111 @@
+/* tslint:disable */
+/* eslint-disable */
+
+/**
+ * Handle exported to JavaScript.
+ */
+export class App {
+    free(): void;
+    [Symbol.dispose](): void;
+    clear_selection(): void;
+    collapse_all(): void;
+    dblclick(x: number, y: number): void;
+    expand_all(): void;
+    focus(id: number): void;
+    /**
+     * Returns `true` if the key was handled.
+     */
+    key(key: string): boolean;
+    /**
+     * `on_inspect(json)` is called whenever a rule should open in the drawer.
+     */
+    constructor(canvas: HTMLCanvasElement, on_inspect: Function);
+    node_count(): number;
+    node_json(id: number): string;
+    pointer_cancel(id: number): void;
+    pointer_down(id: number, x: number, y: number): void;
+    pointer_leave(): void;
+    pointer_move(id: number, x: number, y: number): boolean;
+    pointer_up(id: number, x: number, y: number): void;
+    reset_camera(): void;
+    resize(width: number, height: number, dpr: number): void;
+    /**
+     * Id of the first rule whose Turkish title is exactly `title`, or -1.
+     */
+    rule_id_by_title(title: string): number;
+    /**
+     * Apply a search query; returns the number of matching rules.
+     */
+    search(query: string): number;
+    /**
+     * Start the `requestAnimationFrame` loop (idempotent).
+     */
+    start(): void;
+    wheel(x: number, y: number, delta_y: number): void;
+}
+
+/**
+ * Frequency dictionary lookup. `kind` is "verbs" or "adjectives"; returns
+ * JSON `{kind, total, items}` with the matching entries, most common first.
+ */
+export function dict_search(kind: string, query: string): string;
+
+export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
+
+export interface InitOutput {
+    readonly memory: WebAssembly.Memory;
+    readonly __wbg_app_free: (a: number, b: number) => void;
+    readonly app_clear_selection: (a: number) => void;
+    readonly app_collapse_all: (a: number) => void;
+    readonly app_dblclick: (a: number, b: number, c: number) => void;
+    readonly app_expand_all: (a: number) => void;
+    readonly app_focus: (a: number, b: number) => void;
+    readonly app_key: (a: number, b: number, c: number) => number;
+    readonly app_new: (a: any, b: any) => [number, number, number];
+    readonly app_node_count: (a: number) => number;
+    readonly app_node_json: (a: number, b: number) => [number, number];
+    readonly app_pointer_cancel: (a: number, b: number) => void;
+    readonly app_pointer_down: (a: number, b: number, c: number, d: number) => void;
+    readonly app_pointer_leave: (a: number) => void;
+    readonly app_pointer_move: (a: number, b: number, c: number, d: number) => number;
+    readonly app_pointer_up: (a: number, b: number, c: number, d: number) => void;
+    readonly app_reset_camera: (a: number) => void;
+    readonly app_resize: (a: number, b: number, c: number, d: number) => void;
+    readonly app_rule_id_by_title: (a: number, b: number, c: number) => number;
+    readonly app_search: (a: number, b: number, c: number) => number;
+    readonly app_start: (a: number) => [number, number];
+    readonly app_wheel: (a: number, b: number, c: number, d: number) => void;
+    readonly dict_search: (a: number, b: number, c: number, d: number) => [number, number];
+    readonly wasm_bindgen_221b4da4ce97537e___convert__closures_____invoke___f64______true_: (a: number, b: number, c: number) => void;
+    readonly __wbindgen_exn_store: (a: number) => void;
+    readonly __externref_table_alloc: () => number;
+    readonly __wbindgen_externrefs: WebAssembly.Table;
+    readonly __wbindgen_destroy_closure: (a: number, b: number) => void;
+    readonly __wbindgen_malloc: (a: number, b: number) => number;
+    readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
+    readonly __wbindgen_free: (a: number, b: number, c: number) => void;
+    readonly __externref_table_dealloc: (a: number) => void;
+    readonly __wbindgen_start: () => void;
+}
+
+export type SyncInitInput = BufferSource | WebAssembly.Module;
+
+/**
+ * Instantiates the given `module`, which can either be bytes or
+ * a precompiled `WebAssembly.Module`.
+ *
+ * @param {{ module: SyncInitInput }} module - Passing `SyncInitInput` directly is deprecated.
+ *
+ * @returns {InitOutput}
+ */
+export function initSync(module: { module: SyncInitInput } | SyncInitInput): InitOutput;
+
+/**
+ * If `module_or_path` is {RequestInfo} or {URL}, makes a request and
+ * for everything else, calls `WebAssembly.instantiate` directly.
+ *
+ * @param {{ module_or_path: InitInput | Promise<InitInput> }} module_or_path - Passing `InitInput` directly is deprecated.
+ *
+ * @returns {Promise<InitOutput>}
+ */
+export default function __wbg_init (module_or_path?: { module_or_path: InitInput | Promise<InitInput> } | InitInput | Promise<InitInput>): Promise<InitOutput>;
