@@ -2,7 +2,7 @@
 
 An interactive radial mind-map of Turkish grammar, written in Rust, compiled to WebAssembly and drawn on an HTML5 canvas.
 
-- 10 primary rings and 181 rules, each with a suffix formula, harmony notes, exceptions, a CEFR level and three example sentences
+- 10 primary rings and 293 rules, each with a suffix formula, harmony notes, exceptions, a CEFR level and three example sentences
 - Click to expand or collapse branches, scroll to zoom at the cursor, drag to pan
 - Live search that expands the path to matching rules
 - Rule Inspector drawer with highlighted suffixes
@@ -44,7 +44,7 @@ $env:CARGO_TARGET_DIR = "$env:TEMP\tgm-target"
 
 | File | Role |
 |---|---|
-| `src/grammar_data.rs` | The grammar tree. Add a rule with one `l(...)` call. |
+| `src/grammar_data.rs`, `src/grammar_data/extra.rs` | The grammar tree. Add a rule with one `l(...)` call. |
 | `src/dictionary.rs` | Verb and adjective lists. Add a word with one tuple. |
 | `src/layout.rs` | Radial tree layout and the house-of-floors layout. |
 | `src/lib.rs` | State, camera, input, animation, search, rendering. |

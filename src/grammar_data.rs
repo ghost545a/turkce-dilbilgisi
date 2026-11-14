@@ -14,6 +14,9 @@
 
 use serde::Serialize;
 
+mod extra;
+use extra::extend_grammar;
+
 #[derive(Clone, Serialize)]
 pub struct Example {
     /// Turkish sentence; `[...]` marks the suffix or word being illustrated.
@@ -68,7 +71,7 @@ fn l(
 }
 
 pub fn grammar() -> NodeDef {
-    b(
+    let mut root = b(
         "Türkçe Dilbilgisi",
         "Turkish Grammar",
         "A1–C2",
@@ -77,7 +80,23 @@ pub fn grammar() -> NodeDef {
             phonology(), nouns(), pronouns(), adjectives(), numbers(),
             verbs(), copula(), verbals(), derivation(), syntax(),
         ],
-    )
+    );
+    extend_grammar(&mut root);
+    root
+}
+
+/// Append `extra` to the node reached by following `path` (Turkish titles)
+/// down from `root`.
+fn add(root: &mut NodeDef, path: &[&str], extra: Vec<NodeDef>) {
+    let mut node = root;
+    for step in path {
+        node = node
+            .children
+            .iter_mut()
+            .find(|c| c.tr == *step)
+            .unwrap_or_else(|| panic!("no branch named {step}"));
+    }
+    node.children.extend(extra);
 }
 
 /// The six CEFR floors, ground floor first: (level, Turkish · English name, overview).
@@ -189,7 +208,7 @@ fn phonology() -> NodeDef {
            ("Dün akşam erken yat[t]ım.", "I went to bed early last night."),
            ("Babam balık[ç]ı.", "My father is a fisherman.")]),
         b("Kaynaştırma Ünsüzleri", "Buffer Consonants (y, ş, s, n)", "A1–A2",
-          "Turkish avoids two adjacent vowels across a morpheme boundary; a buffer consonant is inserted between them.",
+          "Turkish avoids two adjacent vowels across a morpheme boundary; a buffer consonant is inserted between them. This is the traditional school list: many modern grammars count only y as a true buffer and treat s, n and ş as part of the suffixes they appear in.",
           vec![
             l("-y-", "Buffer y", "A1", "V + y + V",
               "The default buffer between a vowel-final stem and a vowel-initial case, tense or copular suffix.",
@@ -236,7 +255,7 @@ fn phonology() -> NodeDef {
            ("Teklifi [reddetti].", "He rejected the offer.")]),
         l("Ünlü Türemesi", "Vowel Insertion", "B2", "CC → CVC",
           "A vowel is inserted to break up a cluster, mostly in diminutives and intensified forms.",
-          "az → azıcık, bir → biricik, dar → daracık, genç → gencecik; sapasağlam, yapayalnız. The mirror image of vowel drop: şehri ↔ şehir, ismi ↔ isim.",
+          "az → azıcık, bir → biricik, dar → daracık, genç → gencecik; sapasağlam, yapayalnız.",
           [("Az[ı]cık şeker koy.", "Put in just a tiny bit of sugar."),
            ("Dar[a]cık bir sokakta oturuyorlar.", "They live in a very narrow street."),
            ("Gece yap[a]yalnız kaldım.", "I was left all alone at night.")]),
@@ -406,9 +425,9 @@ fn nouns() -> NodeDef {
           vec![
             l("Farsça Tamlama", "Persian izafet compound", "C2", "N + -ı / -i / -yi + N or Adj",
               "The head noun comes first and is linked to what follows by -i — the reverse of Turkish order. The linking vowel follows the spelling tradition, not vowel harmony.",
-              "Many are now written as one word: aklıselim, hüsnüniyet, hüsnükuruntu. Others keep the hyphen: nokta-i nazar, Kanun-i Esasi, Divan-ı Hümayun, Bab-ı Âli.",
-              [("Bu mesele hakkındaki nokta[-i] nazarınızı öğrenmek isterim.", "I would like to learn your point of view on this matter."),
-               ("Kanun[-i] Esasi 1876'da ilan edildi.", "The Constitution (Kanun-i Esasi) was proclaimed in 1876."),
+              "Many are now written as one word: aklıselim, hüsnüniyet, hüsnükuruntu, noktainazar. Historical names keep the hyphen: Kanun-ı Esasi, Divan-ı Hümayun, Bab-ı Âli, Düyun-ı Umumiye.",
+              [("Gazeteler eskiden Bab[-ı] Âli'de basılırdı.", "Newspapers used to be printed at Bab-ı Âli."),
+               ("Kanun[-ı] Esasi 1876'da ilan edildi.", "The Constitution (Kanun-ı Esasi) was proclaimed in 1876."),
                ("Divan[-ı] Hümayun haftada dört gün toplanırdı.", "The Imperial Council used to meet four days a week.")]),
             l("Arapça Çoğullar", "Arabic plurals", "C2", "-at / -in · broken plurals",
               "Arabic loans may keep their own plural: the regular endings -at and -in, or an internal (‘broken’) plural that changes the vowels of the word.",
@@ -847,7 +866,7 @@ fn derivation() -> NodeDef {
                ("Hava kar[ar]madan dönelim.", "Let's return before it gets dark.")]),
             l("-sA", "desire / regard as", "B2", "N + sa / se",
               "2-way harmony. ‘To long for’ or ‘to treat as’.",
-              "su → susa-, önem → önemse-, garip → garipse-, küçük → küçümse-, ben → benimse-, umur → umursa-.",
+              "su → susa-, önem → önemse-, garip → garipse-, umur → umursa-. Do not confuse with -(I)msA (küçümse-, benimse-).",
               [("Çok su[sa]dım, su var mı?", "I'm very thirsty; is there any water?"),
                ("Onun sözlerini önem[se]miyorum.", "I don't attach importance to his words."),
                ("Kimse beni umur[sa]madı.", "Nobody cared about me.")]),
@@ -869,7 +888,7 @@ fn derivation() -> NodeDef {
                ("Yaz[ıcı]nın kâğıdı bitmiş.", "The printer has run out of paper.")]),
             l("-(A)k", "place / instrument / adjective", "B1", "V + ak / ek / k",
               "2-way harmony; after a vowel only -k.",
-              "Place: dur- → durak, yat- → yatak, kon- → konak. Tool: bıç- → bıçak, ele- → elek, tara- → tarak. Adjective: kork- → korkak, parla- → parlak.",
+              "Place: dur- → durak, yat- → yatak, kon- → konak. Tool: ele- → elek, tara- → tarak, kay- → kayak. Adjective: kork- → korkak, parla- → parlak.",
               [("Otobüs dur[ağ]ında bekliyorum.", "I am waiting at the bus stop."),
                ("Yat[ak] çok rahat.", "The bed is very comfortable."),
                ("Tara[ğ]ımı gördün mü?", "Have you seen my comb?")]),
@@ -1308,7 +1327,7 @@ fn adjectives() -> NodeDef {
                ("Azı[cık] bekler misin?", "Could you wait just a little?")]),
             l("-(I)msI / -(I)mtırak", "-ish", "B2", "Adj + (ı)msı / (i)msi / (u)msu / (ü)msü · (ı)mtırak",
               "4-way harmony on -(I)msI. The last two syllables of -(I)mtırak do not harmonise.",
-              "Mostly colours and tastes: yeşilimsi, sarımsı, mavimsi, ekşimsi, acımsı; yeşilimtırak, sarımtırak. On nouns ‘-like’: çocuksu, erkeksi.",
+              "Mostly colours and tastes: yeşilimsi, sarımsı, mavimsi, ekşimsi, acımsı; yeşilimtırak, sarımtırak. The separate suffix -sI attaches to nouns (çocuksu).",
               [("Yeşil[imsi] bir gömlek giymişti.", "He was wearing a greenish shirt."),
                ("Tadı ekşi[msi].", "Its taste is sourish."),
                ("Gökyüzü sarı[mtırak] bir renk aldı.", "The sky took on a yellowish colour.")]),
@@ -1485,6 +1504,6 @@ mod tests {
                 assert!(n.examples.is_empty());
             }
         });
-        assert!(leaves >= 160, "only {leaves} leaves");
+        assert!(leaves >= 290, "only {leaves} leaves");
     }
 }
