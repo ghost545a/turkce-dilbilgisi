@@ -15,7 +15,9 @@
 use serde::Serialize;
 
 mod extra;
+mod institutes;
 use extra::extend_grammar;
+use institutes::extend_institutes;
 
 #[derive(Clone, Serialize)]
 pub struct Example {
@@ -82,6 +84,7 @@ pub fn grammar() -> NodeDef {
         ],
     );
     extend_grammar(&mut root);
+    extend_institutes(&mut root);
     root
 }
 
@@ -556,7 +559,7 @@ fn verbs() -> NodeDef {
               [("Cam kır[ıl]dı.", "The window was broken."),
                ("Bu kitap çok oku[n]uyor.", "This book is read a lot."),
                ("Kapı saat onda kapat[ıl]ır.", "The door is closed at ten o'clock.")]),
-            l("Dönüşlü -(I)n", "Reflexive Voice", "B1", "V + (ı)n / (i)n / (u)n / (ü)n",
+            l("Dönüşlü -(I)n", "Reflexive Voice", "B2", "V + (ı)n / (i)n / (u)n / (ü)n",
               "4-way harmony. The subject both performs and undergoes the action.",
               "A limited, lexicalised set: yıka-n-, giy-in-, tara-n-, süsle-n-, hazırla-n-, sev-in-, döv-ün-. Otherwise use kendi.",
               [("Her sabah duşta yıka[n]ırım.", "I wash myself in the shower every morning."),
@@ -681,7 +684,7 @@ fn verbals() -> NodeDef {
               [("Kapıyı çal[an] adam kimdi?", "Who was the man who knocked on the door?"),
                ("Yan masada otur[an] kızı tanıyorum.", "I know the girl sitting at the next table."),
                ("Geç gel[en]ler içeri giremez.", "Latecomers cannot enter.")]),
-            l("-AsI", "Wish / curse participle", "C1", "V + ası / esi",
+            l("-AsI", "Wish / curse participle", "B2", "V + ası / esi",
               "2-way harmony on A; the final vowel appears only as ı / i.",
               "Fixed expressions of wishing or cursing, and with gel-: göresim geldi ‘I feel like seeing’. Lexicalised: olası ‘probable’, kahrolası, yıkılası.",
               [("Seni gör[esi]m geldi.", "I feel like seeing you."),
@@ -739,7 +742,7 @@ fn verbals() -> NodeDef {
               [("Koş[arak] okula gitti.", "He went to school running."),
                ("Müzik dinle[yerek] ders çalışırım.", "I study while listening to music."),
                ("Gül[erek] cevap verdi.", "She answered with a laugh.")]),
-            l("-DIkçA", "whenever / the more … / as long as", "B2", "V + dıkça / dikçe / dukça / dükçe · tıkça / tikçe / tukça / tükçe",
+            l("-DIkçA", "whenever / the more … / as long as", "B1", "V + dıkça / dikçe / dukça / dükçe · tıkça / tikçe / tukça / tükçe",
               "4-way harmony on I, 2-way on A, plus assimilation.",
               "gittikçe = ‘increasingly’, oldukça = ‘quite’.",
               [("Onu gör[dükçe] mutlu oluyorum.", "I become happy whenever I see him."),
@@ -757,7 +760,7 @@ fn verbals() -> NodeDef {
               [("Eve gel[ince] beni ara.", "Call me when you get home."),
                ("Yağmur dur[unca] yürüyüşe çıktık.", "When the rain stopped, we went for a walk."),
                ("Onu gör[ünce] çok şaşırdım.", "I was very surprised when I saw him.")]),
-            l("-(y)AlI", "since", "B2", "V + (y)alı / (y)eli",
+            l("-(y)AlI", "since", "B1", "V + (y)alı / (y)eli",
               "2-way harmony on A; buffer y.",
               "Often -DI + -(y)AlI: geldim geleli; or reinforced with beri: geleli beri.",
               [("Buraya taşın[alı] iki yıl oldu.", "It has been two years since we moved here."),
@@ -769,7 +772,7 @@ fn verbals() -> NodeDef {
               [("Eve gel[ir] gel[mez] uyudum.", "I fell asleep as soon as I got home."),
                ("Haberi duy[ar] duy[maz] seni aradım.", "I called you as soon as I heard the news."),
                ("Yemeği bitir[ir] bitir[mez] çıkıyoruz.", "We are leaving as soon as we finish the meal.")]),
-            l("-mAktAnsA", "rather than", "C1", "V + maktansa / mektense",
+            l("-mAktAnsA", "rather than", "B1", "V + maktansa / mektense",
               "2-way harmony. Infinitive -mAk + ablative -DAn + conditional -sA.",
               "Introduces the rejected alternative; the preferred one follows, often with tercih et- or daha iyi.",
               [("Evde otur[maktansa] yürüyüşe çıkalım.", "Rather than sitting at home, let's go for a walk."),
@@ -787,7 +790,7 @@ fn verbals() -> NodeDef {
               [("Öl[esiye] yorgunum.", "I am dead tired."),
                ("Tatilde doy[asıya] uyudum.", "On holiday I slept to my heart's content."),
                ("İki takım kıy[asıya] mücadele etti.", "The two teams fought fiercely.")]),
-            l("-mAksIzIn", "without (formal)", "C1", "V + maksızın / meksizin",
+            l("-mAksIzIn", "without (formal)", "B2", "V + maksızın / meksizin",
               "2-way harmony on the first vowel, 4-way on the rest. The formal, written equivalent of -mAdAn.",
               "Common in legal and official language.",
               [("Hiç dur[maksızın] çalıştı.", "He worked without stopping at all."),
@@ -1504,6 +1507,6 @@ mod tests {
                 assert!(n.examples.is_empty());
             }
         });
-        assert!(leaves >= 290, "only {leaves} leaves");
+        assert!(leaves >= 345, "only {leaves} leaves");
     }
 }

@@ -283,7 +283,7 @@ fn compound_tenses() -> Vec<NodeDef> {
 
 fn voice() -> Vec<NodeDef> {
     vec![
-        l("Çift Ettirgen", "Double causative", "B2", "V + causative + causative",
+        l("Çift Ettirgen", "Double causative", "C1", "V + causative + causative",
           "Causative suffixes alternate: after -DIr comes -t; after -t or -Ir comes -DIr. Each layer adds another person who causes the action.",
           "yap- → yaptır- → yaptırt-; piş- → pişir- → pişirt-; öl- → öldür- → öldürt-. In speech the double form often merely emphasises.",
           [("Raporu yaz[dırt]tım.", "I got the report written (through someone)."),
@@ -457,7 +457,7 @@ fn adverbial_clauses() -> NodeDef {
           [("Çok çalış[tığı hâlde] sınavı geçemedi.", "Although he studied a lot, he couldn't pass the exam."),
            ("Yorgun ol[duğum hâlde] uyuyamadım.", "Although I was tired, I couldn't sleep."),
            ("Bil[diği hâlde] söylemedi.", "Although he knew, he didn't say.")]),
-        l("-mAsInA rağmen", "despite …-ing", "B2", "V + ma + possessive + (n)A + rağmen",
+        l("-mAsInA rağmen", "despite …-ing", "B1", "V + ma + possessive + (n)A + rağmen",
           "Short infinitive + possessive + dative + rağmen.",
           "karşın is a pure-Turkish synonym of rağmen.",
           [("Yağmur yağ[masına rağmen] yürüdük.", "We walked despite its raining."),
