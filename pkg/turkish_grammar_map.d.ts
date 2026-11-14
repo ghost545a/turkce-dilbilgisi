@@ -18,8 +18,10 @@ export class App {
     key(key: string): boolean;
     /**
      * `on_inspect(json)` is called whenever a rule should open in the drawer.
+     * `view` is `"levels"` for the house-of-floors view, anything else for
+     * the radial map.
      */
-    constructor(canvas: HTMLCanvasElement, on_inspect: Function);
+    constructor(canvas: HTMLCanvasElement, on_inspect: Function, view: string);
     node_count(): number;
     node_json(id: number): string;
     pointer_cancel(id: number): void;
@@ -37,6 +39,11 @@ export class App {
      * Apply a search query; returns the number of matching rules.
      */
     search(query: string): number;
+    /**
+     * Turn animations off (`true`) or on. With animations off every change
+     * is applied on the next frame without easing.
+     */
+    set_reduced_motion(reduced: boolean): void;
     /**
      * Start the `requestAnimationFrame` loop (idempotent).
      */
@@ -61,7 +68,7 @@ export interface InitOutput {
     readonly app_expand_all: (a: number) => void;
     readonly app_focus: (a: number, b: number) => void;
     readonly app_key: (a: number, b: number, c: number) => number;
-    readonly app_new: (a: any, b: any) => [number, number, number];
+    readonly app_new: (a: any, b: any, c: number, d: number) => [number, number, number];
     readonly app_node_count: (a: number) => number;
     readonly app_node_json: (a: number, b: number) => [number, number];
     readonly app_pointer_cancel: (a: number, b: number) => void;
@@ -73,6 +80,7 @@ export interface InitOutput {
     readonly app_resize: (a: number, b: number, c: number, d: number) => void;
     readonly app_rule_id_by_title: (a: number, b: number, c: number) => number;
     readonly app_search: (a: number, b: number, c: number) => number;
+    readonly app_set_reduced_motion: (a: number, b: number) => void;
     readonly app_start: (a: number) => [number, number];
     readonly app_wheel: (a: number, b: number, c: number, d: number) => void;
     readonly dict_search: (a: number, b: number, c: number, d: number) => [number, number];

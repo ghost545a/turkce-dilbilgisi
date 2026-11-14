@@ -49,11 +49,16 @@ export class App {
     }
     /**
      * `on_inspect(json)` is called whenever a rule should open in the drawer.
+     * `view` is `"levels"` for the house-of-floors view, anything else for
+     * the radial map.
      * @param {HTMLCanvasElement} canvas
      * @param {Function} on_inspect
+     * @param {string} view
      */
-    constructor(canvas, on_inspect) {
-        const ret = wasm.app_new(canvas, on_inspect);
+    constructor(canvas, on_inspect, view) {
+        const ptr0 = passStringToWasm0(view, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.app_new(canvas, on_inspect, ptr0, len0);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
         }
@@ -153,6 +158,14 @@ export class App {
         return ret >>> 0;
     }
     /**
+     * Turn animations off (`true`) or on. With animations off every change
+     * is applied on the next frame without easing.
+     * @param {boolean} reduced
+     */
+    set_reduced_motion(reduced) {
+        wasm.app_set_reduced_motion(this.__wbg_ptr, reduced);
+    }
+    /**
      * Start the `requestAnimationFrame` loop (idempotent).
      */
     start() {
@@ -218,6 +231,9 @@ function __wbg_get_imports() {
         __wbg_addColorStop_5062bdb863ddbc7c: function() { return handleError(function (arg0, arg1, arg2, arg3) {
             arg0.addColorStop(arg1, getStringFromWasm0(arg2, arg3));
         }, arguments); },
+        __wbg_arcTo_a347b807c468785d: function() { return handleError(function (arg0, arg1, arg2, arg3, arg4, arg5) {
+            arg0.arcTo(arg1, arg2, arg3, arg4, arg5);
+        }, arguments); },
         __wbg_arc_df3f7eb77e59876f: function() { return handleError(function (arg0, arg1, arg2, arg3, arg4, arg5) {
             arg0.arc(arg1, arg2, arg3, arg4, arg5);
         }, arguments); },
@@ -271,6 +287,9 @@ function __wbg_get_imports() {
             const ret = result;
             return ret;
         },
+        __wbg_lineTo_91262b25fb37c461: function(arg0, arg1, arg2) {
+            arg0.lineTo(arg1, arg2);
+        },
         __wbg_measureText_d831259b682a3f7d: function() { return handleError(function (arg0, arg1, arg2) {
             const ret = arg0.measureText(getStringFromWasm0(arg1, arg2));
             return ret;
@@ -314,6 +333,9 @@ function __wbg_get_imports() {
         },
         __wbg_set_lineCap_e73c68b48b40a360: function(arg0, arg1, arg2) {
             arg0.lineCap = getStringFromWasm0(arg1, arg2);
+        },
+        __wbg_set_lineJoin_c9ff5021d8b8197a: function(arg0, arg1, arg2) {
+            arg0.lineJoin = getStringFromWasm0(arg1, arg2);
         },
         __wbg_set_lineWidth_12f039d09cd36dad: function(arg0, arg1) {
             arg0.lineWidth = arg1;

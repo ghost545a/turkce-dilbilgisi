@@ -80,6 +80,56 @@ pub fn grammar() -> NodeDef {
     )
 }
 
+/// The six CEFR floors, ground floor first: (level, Turkish · English name, overview).
+pub const LEVELS: [(&str, &str, &str); 6] = [
+    ("A1", "Başlangıç · Beginner", "The ground floor: vowel harmony, the six cases, possessives, ‘to be’, the present continuous and definite past, numbers and question words."),
+    ("A2", "Temel · Elementary", "Everyday range: aorist, future and evidential past, ability, comparison, the first converbs and noun compounds."),
+    ("B1", "Orta · Intermediate", "Connected speech: participles and relative clauses, passive and causative, conditionals, noun clauses and most postpositions."),
+    ("B2", "Orta Üstü · Upper-intermediate", "Nuance and register: reported speech, compound tenses of hearsay, formal progressive and finer derivation."),
+    ("C1", "İleri · Advanced", "Formal and idiomatic structures: periphrastic tenses, rare converbs and written-register connectors."),
+    ("C2", "Ustalık · Mastery", "The attic: literary, archaic and Ottoman-era patterns needed for older texts and elevated prose."),
+];
+
+fn collect_leaves(n: &NodeDef, level: &str, out: &mut Vec<NodeDef>) {
+    if n.children.is_empty() {
+        if n.level == level {
+            out.push(n.clone());
+        }
+    } else {
+        for c in &n.children {
+            collect_leaves(c, level, out);
+        }
+    }
+}
+
+/// The same rules regrouped for the "study by level" view:
+/// Türkçe → A1 … C2 → topic (the primary ring a rule comes from) → rules.
+pub fn by_level() -> NodeDef {
+    let all = grammar();
+    let floors = LEVELS
+        .iter()
+        .map(|&(level, name, overview)| {
+            let rooms = all
+                .children
+                .iter()
+                .filter_map(|ring| {
+                    let mut leaves = Vec::new();
+                    collect_leaves(ring, level, &mut leaves);
+                    (!leaves.is_empty()).then(|| b(ring.tr, ring.en, level, ring.harmony, leaves))
+                })
+                .collect();
+            b(level, name, level, overview, rooms)
+        })
+        .collect();
+    b(
+        "Türkçe",
+        "Turkish by Level",
+        "A1–C2",
+        "The same grammar arranged as a house of six floors. Start on the ground floor (A1) and climb: each floor holds the rules usually learned at that CEFR level, grouped by topic.",
+        floors,
+    )
+}
+
 // ───────────────────────────── 1. Ses Bilgisi ─────────────────────────────
 
 fn phonology() -> NodeDef {
@@ -351,6 +401,22 @@ fn nouns() -> NodeDef {
                ("Yaş[ça] benden büyük.", "He is older than me in age."),
                ("Karar meclis[çe] onaylandı.", "The decision was approved by the assembly.")]),
           ]),
+        b("Osmanlıca Kalıplar", "Ottoman-era Patterns", "C2",
+          "Persian and Arabic noun patterns that survive in formal, legal and literary Turkish.",
+          vec![
+            l("Farsça Tamlama", "Persian izafet compound", "C2", "N + -ı / -i / -yi + N or Adj",
+              "The head noun comes first and is linked to what follows by -i — the reverse of Turkish order. The linking vowel follows the spelling tradition, not vowel harmony.",
+              "Many are now written as one word: aklıselim, hüsnüniyet, hüsnükuruntu. Others keep the hyphen: nokta-i nazar, Kanun-i Esasi, Divan-ı Hümayun, Bab-ı Âli.",
+              [("Bu mesele hakkındaki nokta[-i] nazarınızı öğrenmek isterim.", "I would like to learn your point of view on this matter."),
+               ("Kanun[-i] Esasi 1876'da ilan edildi.", "The Constitution (Kanun-i Esasi) was proclaimed in 1876."),
+               ("Divan[-ı] Hümayun haftada dört gün toplanırdı.", "The Imperial Council used to meet four days a week.")]),
+            l("Arapça Çoğullar", "Arabic plurals", "C2", "-at / -in · broken plurals",
+              "Arabic loans may keep their own plural: the regular endings -at and -in, or an internal (‘broken’) plural that changes the vowels of the word.",
+              "evrak (← varak), ahval (← hâl), hukuk (← hak), eşya (← şey), tafsilat, malumat, memurin. They are treated as singular in Turkish and can take -lAr again: evraklar.",
+              [("[Evrak]ı masaya bıraktım.", "I left the documents on the table."),
+               ("Memleketin [ahval]i pek iç açıcı değil.", "The state of affairs of the country is not very heartening."),
+               ("[Tafsilat]ı sonra konuşuruz.", "We will discuss the details later.")]),
+          ]),
       ])
 }
 
@@ -449,6 +515,12 @@ fn verbs() -> NodeDef {
               [("Yağmur yağ[arsa] evde kalırız.", "If it rains, we will stay at home."),
                ("Yorgun[sa]n biraz dinlen.", "If you are tired, rest a little."),
                ("Ödevini bitir[diyse]n dışarı çıkabilirsin.", "If you have finished your homework, you can go out.")]),
+            l("-mIş / -AcAk olmak", "Periphrastic tenses with olmak", "C1", "V + mIş / (y)AcAk + ol- + tense",
+              "A participle plus the auxiliary ol-, which carries the tense and person. -mIş ol- = completed by a reference point; -AcAk ol- = on the point of doing.",
+              "-mIş olacak ‘will have done’, -mIş oluyor ‘thereby has done’, -AcAk oldu ‘was about to, made as if to’, -Ir oldu ‘came to do habitually’.",
+              [("Yarın bu saatte işi bitir[miş olacağım].", "By this time tomorrow I will have finished the work."),
+               ("Tam çık[acak oldum], telefon çaldı.", "I was just about to leave when the phone rang."),
+               ("Böylece konuyu tamamla[mış oluyoruz].", "With this, we have thus completed the topic.")]),
           ]),
         b("Fiil Çatısı", "Verb Voice", "A2–B1",
           "Voice suffixes sit directly on the stem and change who does what to whom.",
@@ -533,6 +605,22 @@ fn verbs() -> NodeDef {
               [("Bana yardım [eder] misin?", "Would you help me?"),
                ("Çok teşekkür [ederim].", "Thank you very much."),
                ("Geçen yıl mezun [oldum].", "I graduated last year.")]),
+          ]),
+        b("Edebî Biçimler", "Literary Forms", "C2",
+          "Verb forms met in poetry, prayers, proverbs and older prose rather than in everyday speech.",
+          vec![
+            l("Edebî İstek -(y)A", "Literary optative (2nd / 3rd person)", "C2", "V + (y)a / (y)e · (y)asın / (y)esin",
+              "2-way harmony; buffer y. The 2nd and 3rd persons of the optative, which everyday speech replaces with the imperative.",
+              "Survives in blessings, curses and fixed phrases: Allah vere, kolay gele, ola ki, gelesin, olmaya ki. Regional speech still uses it freely.",
+              [("Allah kolaylık ver[e].", "May God grant ease."),
+               ("Bir daha buraya gelme[yesin]!", "May you never come here again!"),
+               ("[Ola] ki gelmez, biz yine de bekleyelim.", "It may be that he does not come; let us wait all the same.")]),
+            l("-mAdA", "Literary progressive", "C2", "V + mada / mede (+ DIr)",
+              "2-way harmony. The short infinitive -mA plus the locative: a literary variant of -mAktA.",
+              "Found in poetry and elevated prose; modern standard prose prefers -mAktA.",
+              [("Güneş bat[mada].", "The sun is setting."),
+               ("Yıllar birer birer geç[mede].", "The years are passing one by one."),
+               ("Ömür akıp git[mede]dir.", "Life is flowing away.")]),
           ]),
       ])
 }
@@ -662,6 +750,42 @@ fn verbals() -> NodeDef {
               [("Eve gel[ir] gel[mez] uyudum.", "I fell asleep as soon as I got home."),
                ("Haberi duy[ar] duy[maz] seni aradım.", "I called you as soon as I heard the news."),
                ("Yemeği bitir[ir] bitir[mez] çıkıyoruz.", "We are leaving as soon as we finish the meal.")]),
+            l("-mAktAnsA", "rather than", "C1", "V + maktansa / mektense",
+              "2-way harmony. Infinitive -mAk + ablative -DAn + conditional -sA.",
+              "Introduces the rejected alternative; the preferred one follows, often with tercih et- or daha iyi.",
+              [("Evde otur[maktansa] yürüyüşe çıkalım.", "Rather than sitting at home, let's go for a walk."),
+               ("Yalan söyle[mektense] susmayı tercih ederim.", "I prefer to stay silent rather than lie."),
+               ("Bekle[mektense] yürüyerek gittim.", "Rather than wait, I went on foot.")]),
+            l("-cAsInA", "as if", "C1", "V + tense (-Ir / -mIş / -AcAk) + casına / cesine · çasına / çesine",
+              "2-way harmony plus assimilation. Attaches to a tensed stem, not to the bare verb.",
+              "Equivalent to … gibi but more literary. On adjectives it makes an adverb: delicesine, çılgıncasına.",
+              [("Her şeyi bilir[cesine] konuşuyor.", "He talks as if he knew everything."),
+               ("Beni hiç görmemiş[çesine] yanımdan geçti.", "She walked past me as if she had never seen me."),
+               ("Uçar[casına] koştu.", "He ran as if flying.")]),
+            l("-(y)AsIyA", "to the point of", "C1", "V + (y)asıya / (y)esiye",
+              "2-way harmony on A; buffer y. Expresses an extreme degree.",
+              "Limited to a handful of verbs: ölesiye, doyasıya, kıyasıya, bıktırasıya, çıldırasıya.",
+              [("Öl[esiye] yorgunum.", "I am dead tired."),
+               ("Tatilde doy[asıya] uyudum.", "On holiday I slept to my heart's content."),
+               ("İki takım kıy[asıya] mücadele etti.", "The two teams fought fiercely.")]),
+            l("-mAksIzIn", "without (formal)", "C1", "V + maksızın / meksizin",
+              "2-way harmony on the first vowel, 4-way on the rest. The formal, written equivalent of -mAdAn.",
+              "Common in legal and official language.",
+              [("Hiç dur[maksızın] çalıştı.", "He worked without stopping at all."),
+               ("İzin al[maksızın] içeri girilmez.", "One may not enter without obtaining permission."),
+               ("Fark gözet[meksizin] herkese yardım etti.", "She helped everyone without discrimination.")]),
+            l("-DIğI takdirde", "in the event that", "C1", "V + DIk + possessive + takdirde",
+              "The participle -DIk with a possessive agreeing with the subject, followed by the invariable takdirde. Formal equivalent of -(y)sA.",
+              "Related formal patterns: -DIğI hâlde ‘although’, -DIğI sürece ‘as long as’, -mAsI hâlinde ‘in case of’.",
+              [("Ödeme yapılma[dığı takdirde] sözleşme iptal edilir.", "In the event that payment is not made, the contract is cancelled."),
+               ("İstedi[ğiniz takdirde] size yardımcı olabiliriz.", "Should you wish, we can assist you."),
+               ("Yağmur yağ[dığı takdirde] maç ertelenecek.", "In the event of rain, the match will be postponed.")]),
+            l("-DI mI", "once / whenever", "C1", "V + DI + person + mI, main clause (aorist)",
+              "The definite past followed by the question particle, used not as a question but as ‘once X happens’. 4-way harmony on both.",
+              "The main verb is normally in the aorist. Colloquial and proverbial in tone.",
+              [("Bahar gel[di mi] her yer yeşerir.", "Once spring comes, everywhere turns green."),
+               ("Bir karar ver[di mi] asla dönmez.", "Once he makes a decision, he never goes back."),
+               ("Para bit[ti mi] dostlar da kaybolur.", "Once the money runs out, friends disappear too.")]),
           ]),
       ])
 }
@@ -755,6 +879,12 @@ fn derivation() -> NodeDef {
               [("Seç[im] sonuçları açıklandı.", "The election results were announced."),
                ("Bugün benim doğ[um] günüm.", "Today is my birthday."),
                ("Bu kelimenin anla[m]ı ne?", "What is the meaning of this word?")]),
+            l("-mAklIk", "archaic action noun", "C2", "V + maklık / meklik (+ possessive)",
+              "2-way harmony on -mAk, 4-way on -lIk; k → ğ before a vowel. The infinitive made into a noun that can take a possessive, which -mAk alone cannot.",
+              "Archaic and bookish; modern Turkish uses -mA: gelmekliğim → gelmem.",
+              [("Buraya gelmek[liğ]imiz bir tesadüf değildi.", "Our coming here was not a coincidence."),
+               ("Onun susmak[lığ]ı herkesi şaşırttı.", "His keeping silent surprised everyone."),
+               ("Yardım etmek[liğ]iniz bizi çok sevindirdi.", "Your helping made us very glad.")]),
           ]),
         b("Fiilden Fiil", "Verb → Verb", "B1",
           "Make a new verb stem from a verb; most are voice suffixes that have fused into dictionary words.",
@@ -980,6 +1110,12 @@ fn syntax() -> NodeDef {
               [("[Eğer] vaktin varsa bana uğra.", "If you have time, drop by."),
                ("[Eğer] yağmur yağarsa pikniğe gitmeyiz.", "If it rains, we won't go on the picnic."),
                ("[Şayet] gelemezsem sana haber veririm.", "Should I be unable to come, I'll let you know.")]),
+            l("zira / velev ki / meğerki", "for / even if / unless (archaic)", "C2", "clause, zira + reason · velev ki + V-sA / optative · meğerki + optative",
+              "Invariable Persian and Arabic loans of the written, formal or old-fashioned register.",
+              "zira = çünkü. velev ki = -sA bile. meğerki = ‘unless’, followed by the optative or -sA. Related: binaenaleyh ‘therefore’, maamafih ‘nevertheless’.",
+              [("Gelemedim, [zira] hastaydım.", "I could not come, for I was ill."),
+               ("[Velev ki] haklı olsun, böyle konuşmamalıydı.", "Even if he be right, he should not have spoken like this."),
+               ("Gitmem, [meğerki] sen de gelesin.", "I will not go, unless you come too.")]),
           ]),
         l("Koşul Cümleleri", "Conditional Clauses", "B1", "(eğer) V-tense-(y)sA, main clause",
           "The condition precedes the main clause. Real: aorist + -sA → aorist or future. Unreal present: -sA → -Ir(dI). Unreal past: -sAydI → -IrdI.",
@@ -1300,6 +1436,26 @@ mod tests {
     #[test]
     fn has_ten_primary_rings() {
         assert_eq!(grammar().children.len(), 10);
+    }
+
+    #[test]
+    fn by_level_holds_every_rule_exactly_once() {
+        let count = |root: &NodeDef| {
+            let mut n = 0;
+            walk(root, 0, &mut |x, _| if x.children.is_empty() { n += 1 });
+            n
+        };
+        let house = by_level();
+        assert_eq!(house.children.len(), 6);
+        assert_eq!(count(&house), count(&grammar()));
+        for (floor, &(level, _, _)) in house.children.iter().zip(LEVELS.iter()) {
+            assert_eq!(floor.tr, level);
+            assert!(!floor.children.is_empty(), "floor {level} is empty");
+            walk(floor, 0, &mut |x, _| if x.children.is_empty() { assert_eq!(x.level, level, "{}", x.tr) });
+            if level == "C1" || level == "C2" {
+                assert!(count(floor) >= 6, "floor {level} has only {} rules", count(floor));
+            }
+        }
     }
 
     #[test]

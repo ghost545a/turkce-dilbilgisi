@@ -301,3 +301,20 @@ li.open .dict-detail { display: block; }
   .dictionary { z-index: 25; }
 }
 @media (prefers-reduced-motion: reduce) { .dictionary { transition: none; } }
+
+/* ───────────── View switch (Map / By Level) ───────────── */
+
+.views { display: flex; gap: 2px; margin-left: 4px; padding: 3px; border-radius: 9px; background: rgba(0, 0, 0, 0.3); }
+.views a {
+  padding: 4px 10px; border-radius: 6px; text-decoration: none; white-space: nowrap;
+  color: var(--muted); font-size: 12.5px; font-weight: 500;
+}
+.views a:hover { color: #fff; }
+.views a[aria-current="page"] { background: var(--deep-red); color: #fff; }
+.views a:focus-visible { outline: 2px solid var(--crimson); outline-offset: 1px; }
+.views sup {
+  margin-left: 3px; padding: 1px 4px; border-radius: 4px; vertical-align: 2px;
+  background: rgba(255, 255, 255, 0.14); font: 600 8.5px var(--mono); letter-spacing: 0.06em;
+}
+body.drawer-open .brand-name { display: none; }
+@media (max-width: 860px) { .brand-name { display: none; } }

@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0D0D12">
+  <title>Türkçe Dilbilgisi — Study by Level (Beta)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../styles.css">
+</head>
+<body data-view="levels">
+  <canvas id="map" aria-label="Turkish grammar arranged as six CEFR floors" tabindex="0"></canvas>
+
+  <header class="hud">
+    <div class="brand">
+      <span class="brand-dot" aria-hidden="true"></span>
+      <span class="brand-name">Türkçe Dilbilgisi</span>
+      <nav class="views" aria-label="Views">
+        <a href="../main/">Map</a>
+        <a href="../by-level/" aria-current="page">By Level <sup>BETA</sup></a>
+      </nav>
+    </div>
+
+    <label class="search">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
+      <input id="search" type="search" placeholder="Search rules or suffixes…  -yor, genitive, ki" autocomplete="off" spellcheck="false" aria-label="Search rules or suffixes">
+      <span id="search-count" class="search-count" aria-live="polite"></span>
+      <kbd>/</kbd>
+    </label>
+
+    <div class="actions">
+      <button id="btn-dict" type="button" class="accent" title="Verb and adjective dictionary (D)" aria-expanded="false" aria-controls="dictionary">Dictionary</button>
+      <button id="btn-expand" type="button" title="Expand all (E)">Expand All</button>
+      <button id="btn-collapse" type="button" title="Close all topics (C)">Collapse All</button>
+      <button id="btn-reset" type="button" title="Reset camera (0)">Reset Camera</button>
+    </div>
+  </header>
+
+  <footer class="hint">
+    <span><b>Scroll</b> zoom</span>
+    <span><b>Drag</b> pan</span>
+    <span><b>Click</b> a floor to fold it, a topic to open it, a rule to read it</span>
+    <span><b>Double-click</b> inspect a floor or topic</span>
+    <span><b>D</b> dictionary</span>
+  </footer>
+
+  <aside id="inspector" class="inspector" aria-hidden="true" aria-label="Rule inspector">
+    <button id="inspector-close" class="inspector-close" type="button" aria-label="Close inspector">×</button>
+    <div id="inspector-body" class="inspector-body"></div>
+  </aside>
+
+  <aside id="dictionary" class="dictionary" aria-hidden="true" aria-label="Frequency dictionary">
+    <div class="dict-head">
+      <button id="dict-close" class="inspector-close" type="button" aria-label="Close dictionary">×</button>
+      <h2>Sözlük <span>Dictionary</span></h2>
+      <p class="dict-sub">Most common words first. Ranking is approximate.</p>
+      <div class="dict-tabs" role="tablist">
+        <button id="tab-verbs" type="button" role="tab" aria-selected="true" data-kind="verbs">Fiiller · Verbs</button>
+        <button id="tab-adjectives" type="button" role="tab" aria-selected="false" data-kind="adjectives">Sıfatlar · Adjectives</button>
+      </div>
+      <label class="search dict-search">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
+        <input id="dict-input" type="search" placeholder="Search Turkish or English…" autocomplete="off" spellcheck="false" aria-label="Search the dictionary">
+        <span id="dict-count" class="search-count"></span>
+      </label>
+    </div>
+    <ol id="dict-list" class="dict-list"></ol>
+  </aside>
+
+  <div id="status" class="status">Loading grammar engine…</div>
+
+  <script type="module" src="../main.js"></script>
+</body>
+</html>

@@ -33,6 +33,17 @@ const FONT_NODE: &str = "500 13px Inter, system-ui, sans-serif";
 const FONT_MONO: &str = "500 12.5px 'JetBrains Mono', ui-monospace, monospace";
 const FONT_ROOT: &str = "600 14px Inter, system-ui, sans-serif";
 const FONT_ROOT_SUB: &str = "400 10.5px Inter, system-ui, sans-serif";
+const FONT_ROOM: &str = "600 13px Inter, system-ui, sans-serif";
+const HOUSE_ROOT_R: f64 = 44.0;
+
+/// Which arrangement of the grammar is shown.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum View {
+    /// Radial mind-map grouped by topic.
+    Radial,
+    /// House of six CEFR floors.
+    Levels,
+}
 
 struct Node {
     def: NodeDef,
@@ -56,20 +67,37 @@ struct Node {
     hay: Vec<char>,
     matched: bool,
     on_match_path: bool,
+    view: View,
+    /// Number of leaf rules in this node's subtree (1 for a leaf).
+    leaf_count: usize,
 }
 
 impl Node {
     fn radius(&self) -> f64 {
-        match self.depth {
-            0 => ROOT_R,
-            1 => 11.0,
-            2 => 7.0,
-            _ => 4.5,
+        match (self.view, self.depth) {
+            (View::Radial, 0) => ROOT_R,
+            (View::Radial, 1) => 11.0,
+            (View::Radial, 2) => 7.0,
+            (View::Radial, _) => 4.5,
+            (View::Levels, 0) => HOUSE_ROOT_R,
+            (View::Levels, 1) => 13.0,
+            (View::Levels, 2) => 6.0,
+            (View::Levels, _) => 4.0,
+        }
+    }
+    /// Text drawn next to the node.
+    fn label(&self) -> String {
+        if self.view == View::Levels && self.depth == 1 {
+            format!("{} · {}", self.def.tr, self.def.en)
+        } else {
+            self.def.tr.to_string()
         }
     }
     fn font(&self) -> &'static str {
         if self.depth == 1 {
             FONT_RING
+        } else if self.view == View::Levels && self.depth == 2 {
+            FONT_ROOM
         } else if self.def.tr.starts_with('-') {
             FONT_MONO
         } else {
@@ -86,7 +114,7 @@ impl Node {
     }
 }
 
-fn flatten(mut def: NodeDef, parent: Option<usize>, depth: usize, out: &mut Vec<Node>) -> usize {
+fn flatten(mut def: NodeDef, parent: Option<usize>, depth: usize, view: View, out: &mut Vec<Node>) -> usize {
     let kids = std::mem::take(&mut def.children);
     let id = out.len();
     // The title is indexed twice: as written, and with optional "(…)" parts
@@ -121,10 +149,15 @@ fn flatten(mut def: NodeDef, parent: Option<usize>, depth: usize, out: &mut Vec<
         hay,
         matched: false,
         on_match_path: false,
+        view,
+        leaf_count: 1,
     });
     for k in kids {
-        let c = flatten(k, Some(id), depth + 1, out);
+        let c = flatten(k, Some(id), depth + 1, view, out);
         out[id].children.push(c);
+    }
+    if !out[id].children.is_empty() {
+        out[id].leaf_count = out[id].children.iter().map(|&c| out[c].leaf_count).sum();
     }
     id
 }
@@ -246,17 +279,52 @@ struct State {
     last_ts: f64,
     dirty: bool,
     pending_inspect: Option<usize>,
+    view: View,
+    /// Skip animations: every spring jumps straight to its target.
+    reduced: bool,
+    /// Floor rectangles of the house view (ground floor first), animated.
+    bands: Vec<BandAnim>,
+    /// Bounding box of the house view.
+    bbox: (f64, f64, f64, f64),
+}
+
+/// A floor rectangle `[x, y, w, h]` easing towards its target.
+struct BandAnim {
+    node: usize,
+    cur: [f64; 4],
+    vel: [f64; 4],
+    tgt: [f64; 4],
+}
+
+fn level_color(level: &str) -> &'static str {
+    match level.as_bytes().first() {
+        Some(b'A') => "#5FD38D",
+        Some(b'B') => "#F2B84B",
+        _ => "#FF5C7A",
+    }
+}
+
+fn rounded_rect(ctx: &CanvasRenderingContext2d, x: f64, y: f64, w: f64, h: f64, r: f64) {
+    let r = r.min(w / 2.0).min(h / 2.0).max(0.0);
+    ctx.begin_path();
+    ctx.move_to(x + r, y);
+    ctx.arc_to(x + w, y, x + w, y + h, r).ok();
+    ctx.arc_to(x + w, y + h, x, y + h, r).ok();
+    ctx.arc_to(x, y + h, x, y, r).ok();
+    ctx.arc_to(x, y, x + w, y, r).ok();
+    ctx.close_path();
 }
 
 impl State {
     fn measure_labels(&mut self) {
         for n in self.nodes.iter_mut() {
             self.ctx.set_font(n.font());
+            let text = n.label();
             n.label_w = self
                 .ctx
-                .measure_text(n.def.tr)
+                .measure_text(&text)
                 .map(|m| m.width())
-                .unwrap_or(n.def.tr.chars().count() as f64 * 7.5);
+                .unwrap_or(text.chars().count() as f64 * 7.5);
         }
     }
 
@@ -267,7 +335,25 @@ impl State {
             .iter()
             .map(|n| LayoutNode { children: n.children.clone(), expanded: n.expanded, extent: n.extent() })
             .collect();
-        let placed = layout::layout(&ln, 0);
+        let placed = match self.view {
+            View::Radial => layout::layout(&ln, 0),
+            View::Levels => {
+                let widths: Vec<f64> = self.nodes.iter().map(|n| n.label_w).collect();
+                let house = layout::layout_floors(&ln, &widths, 0);
+                let old = std::mem::take(&mut self.bands);
+                self.bands = house
+                    .bands
+                    .iter()
+                    .map(|b| {
+                        let tgt = [b.x, b.y, b.w, b.h];
+                        let cur = old.iter().find(|o| o.node == b.node).map_or(tgt, |o| o.cur);
+                        BandAnim { node: b.node, cur, vel: [0.0; 4], tgt }
+                    })
+                    .collect();
+                self.bbox = house.bbox;
+                house.placed
+            }
+        };
         // Parents always precede their children in the arena, so a parent's
         // position/target is final by the time its children are processed.
         for i in 0..self.nodes.len() {
@@ -302,13 +388,54 @@ impl State {
         self.dirty = true;
     }
 
+    /// Jump every animated value (nodes, floors, camera) to its target.
+    fn snap(&mut self) {
+        for n in self.nodes.iter_mut() {
+            n.x = n.tx;
+            n.y = n.ty;
+            n.vx = 0.0;
+            n.vy = 0.0;
+            n.appear = n.tappear;
+            n.va = 0.0;
+        }
+        for b in self.bands.iter_mut() {
+            b.cur = b.tgt;
+            b.vel = [0.0; 4];
+        }
+        self.zoom = self.tzoom;
+        self.vz = 0.0;
+        if let Some((sx, sy, wx, wy)) = self.anchor.take() {
+            self.cx = wx - (sx - self.w / 2.0) / self.zoom;
+            self.cy = wy - (sy - self.h / 2.0) / self.zoom;
+            self.tcx = self.cx;
+            self.tcy = self.cy;
+        } else {
+            self.cx = self.tcx;
+            self.cy = self.tcy;
+        }
+        self.vcx = 0.0;
+        self.vcy = 0.0;
+        self.dirty = true;
+    }
+
     fn update(&mut self, dt: f64) -> bool {
+        if self.reduced {
+            if self.dirty {
+                self.snap();
+            }
+            return false;
+        }
         let mut active = false;
         for n in self.nodes.iter_mut() {
             active |= spring(&mut n.x, &mut n.vx, n.tx, 130.0, dt, 0.05);
             active |= spring(&mut n.y, &mut n.vy, n.ty, 130.0, dt, 0.05);
             active |= spring(&mut n.appear, &mut n.va, n.tappear, 170.0, dt, 0.002);
             n.appear = n.appear.clamp(0.0, 1.0);
+        }
+        for b in self.bands.iter_mut() {
+            for k in 0..4 {
+                active |= spring(&mut b.cur[k], &mut b.vel[k], b.tgt[k], 130.0, dt, 0.05);
+            }
         }
         let mut lz = self.zoom.ln();
         let zooming = spring(&mut lz, &mut self.vz, self.tzoom.ln(), 220.0, dt, 0.0005);
@@ -362,10 +489,17 @@ impl State {
             if n.depth == 0 || label_hit.is_some() {
                 continue;
             }
-            let a = n.y.atan2(n.x);
-            let lx = dx * a.cos() + dy * a.sin();
-            let ly = -dx * a.sin() + dy * a.cos();
-            if lx >= 0.0 && lx <= r + n.label_w + 16.0 && ly.abs() <= 11.0 {
+            let (lx, ly, reach) = match self.view {
+                View::Radial => {
+                    let a = n.y.atan2(n.x);
+                    (dx * a.cos() + dy * a.sin(), -dx * a.sin() + dy * a.cos(), r + n.label_w + 16.0)
+                }
+                View::Levels => {
+                    let count = if n.children.is_empty() { 0.0 } else { layout::COUNT_W };
+                    (dx, dy, r + 8.0 + n.label_w + count)
+                }
+            };
+            if lx >= 0.0 && lx <= reach && ly.abs() <= 11.0 {
                 label_hit = Some(i);
             }
         }
@@ -395,23 +529,36 @@ impl State {
         if self.w <= 0.0 || self.h <= 0.0 {
             return;
         }
-        let reach = self
-            .nodes
-            .iter()
-            .filter(|n| n.tappear > 0.5)
-            .map(|n| n.tx.hypot(n.ty) + n.extent())
-            .fold(ROOT_R, f64::max)
-            + 30.0;
-        let avail = (self.w.min(self.h - 60.0) / 2.0).max(60.0);
-        self.tzoom = (avail / reach).clamp(MIN_ZOOM, 1.25);
-        self.tcx = 0.0;
-        self.tcy = 0.0;
+        let (zoom, cx, cy) = match self.view {
+            View::Radial => {
+                let reach = self
+                    .nodes
+                    .iter()
+                    .filter(|n| n.tappear > 0.5)
+                    .map(|n| n.tx.hypot(n.ty) + n.extent())
+                    .fold(ROOT_R, f64::max)
+                    + 30.0;
+                let avail = (self.w.min(self.h - 60.0) / 2.0).max(60.0);
+                (avail / reach, 0.0, 0.0)
+            }
+            View::Levels => {
+                // Fit the house below the HUD (about 64 px) with a margin.
+                let (x0, y0, x1, y1) = self.bbox;
+                let zx = (self.w - 48.0).max(80.0) / (x1 - x0).max(1.0);
+                let zy = (self.h - 120.0).max(80.0) / (y1 - y0).max(1.0);
+                let zoom = zx.min(zy).clamp(MIN_ZOOM, 1.25);
+                (zoom, (x0 + x1) / 2.0, (y0 + y1) / 2.0 - 22.0 / zoom)
+            }
+        };
+        self.tzoom = zoom.clamp(MIN_ZOOM, 1.25);
+        self.tcx = cx;
+        self.tcy = cy;
         self.anchor = None;
         self.auto_fit = true;
         if snap {
             self.zoom = self.tzoom;
-            self.cx = 0.0;
-            self.cy = 0.0;
+            self.cx = self.tcx;
+            self.cy = self.tcy;
             self.vz = 0.0;
             self.vcx = 0.0;
             self.vcy = 0.0;
@@ -571,8 +718,10 @@ impl State {
     }
 
     fn collapse_all(&mut self) {
+        // The house keeps its floors open and closes the rooms.
+        let keep = if self.view == View::Levels { 1 } else { 0 };
         for n in self.nodes.iter_mut() {
-            n.expanded = n.depth == 0;
+            n.expanded = n.depth <= keep;
         }
         self.relayout();
         self.fit(false);
@@ -673,6 +822,146 @@ impl State {
 
     // ───────────────────────────── rendering ─────────────────────────────
 
+    /// Draw the house-of-floors view (camera transform already applied).
+    fn render_house(&self) {
+        let ctx = &self.ctx;
+        let z = self.zoom;
+        let mut on_path = vec![false; self.nodes.len()];
+        let mut cur = self.hover.or(self.selected);
+        while let Some(i) = cur {
+            on_path[i] = true;
+            cur = self.nodes[i].parent;
+        }
+        ctx.set_line_join("round");
+        ctx.set_line_cap("round");
+
+        // Ground line under the ground floor and roof over the top floor.
+        if let (Some(ground), Some(top)) = (self.bands.first(), self.bands.last()) {
+            let [gx, gy, gw, gh] = ground.cur;
+            ctx.set_global_alpha(1.0);
+            ctx.set_stroke_style_str("rgba(255,255,255,0.22)");
+            ctx.set_line_width(2.0);
+            ctx.begin_path();
+            ctx.move_to(gx - 70.0, gy + gh + 9.0);
+            ctx.line_to(gx + gw + 70.0, gy + gh + 9.0);
+            ctx.stroke();
+
+            let [x, y, w, _] = top.cur;
+            ctx.begin_path();
+            ctx.move_to(x - 30.0, y - 8.0);
+            ctx.line_to(x + w / 2.0, y - layout::ROOF_H);
+            ctx.line_to(x + w + 30.0, y - 8.0);
+            ctx.close_path();
+            ctx.set_fill_style_str("rgba(155,17,30,0.12)");
+            ctx.fill();
+            ctx.set_stroke_style_str("rgba(220,20,60,0.6)");
+            ctx.set_line_width(1.8);
+            ctx.stroke();
+        }
+
+        // Floors.
+        for b in &self.bands {
+            let n = &self.nodes[b.node];
+            let [x, y, w, h] = b.cur;
+            let hot = on_path[b.node] || (self.searching && (n.matched || n.on_match_path));
+            ctx.set_global_alpha(n.appear * self.dim(n));
+            rounded_rect(ctx, x, y, w, h, 10.0);
+            ctx.set_fill_style_str("rgba(255,255,255,0.04)");
+            ctx.fill();
+            ctx.set_stroke_style_str(if hot { CRIMSON } else { "rgba(255,255,255,0.14)" });
+            ctx.set_line_width(if hot { 1.8 } else { 1.0 });
+            ctx.stroke();
+            ctx.set_fill_style_str(level_color(n.def.level));
+            ctx.fill_rect(x, y + 10.0, 4.0, (h - 20.0).max(0.0));
+        }
+
+        // Nodes and their horizontal labels.
+        let show_labels = 13.0 * z >= 3.5;
+        ctx.set_text_baseline("middle");
+        ctx.set_text_align("left");
+        for (i, n) in self.nodes.iter().enumerate().skip(1) {
+            if n.appear < 0.01 {
+                continue;
+            }
+            let r = n.radius() * (0.4 + 0.6 * n.appear);
+            let hovered = self.hover == Some(i);
+            let selected = self.selected == Some(i);
+            let branch = !n.children.is_empty();
+            ctx.set_global_alpha(n.appear * self.dim(n));
+            if hovered || selected || n.matched {
+                ctx.set_shadow_color(CRIMSON);
+                ctx.set_shadow_blur(if hovered { 22.0 } else { 14.0 });
+            }
+            ctx.begin_path();
+            ctx.arc(n.x, n.y, r, 0.0, TAU).ok();
+            if n.matched {
+                ctx.set_fill_style_str("#FF2D55");
+            } else if n.depth == 1 {
+                ctx.set_fill_style_str(level_color(n.def.level));
+            } else if branch {
+                ctx.set_fill_style_str(if n.expanded { "#16161F" } else { DEEP_RED });
+            } else {
+                ctx.set_fill_style_str(if hovered || selected { "#FFFFFF" } else { "#B9B9C9" });
+            }
+            ctx.fill();
+            ctx.set_shadow_blur(0.0);
+            if branch && n.depth > 1 {
+                ctx.set_stroke_style_str(CRIMSON);
+                ctx.set_line_width(1.5);
+                ctx.stroke();
+            }
+            if !show_labels || n.appear < 0.25 {
+                continue;
+            }
+            let tx = n.x + n.radius() + 8.0;
+            ctx.set_font(n.font());
+            ctx.set_fill_style_str(if n.matched {
+                "#FF5C7A"
+            } else if hovered || selected {
+                "#FFFFFF"
+            } else if n.depth <= 2 {
+                "#F2F2F7"
+            } else {
+                "#C8C8D6"
+            });
+            ctx.fill_text(&n.label(), tx, n.y + 0.5).ok();
+            if branch {
+                let count = if n.leaf_count == 1 { "1 rule".to_string() } else { format!("{} rules", n.leaf_count) };
+                ctx.set_font(FONT_ROOT_SUB);
+                ctx.set_fill_style_str("#7C7C92");
+                ctx.fill_text(&count, tx + n.label_w + 9.0, n.y + 1.0).ok();
+            }
+        }
+
+        // The root sits in the roof.
+        let root = &self.nodes[0];
+        ctx.set_global_alpha(1.0);
+        ctx.set_shadow_color("rgba(220,20,60,0.6)");
+        ctx.set_shadow_blur(if self.hover == Some(0) { 50.0 } else { 30.0 });
+        ctx.begin_path();
+        ctx.arc(root.x, root.y, HOUSE_ROOT_R, 0.0, TAU).ok();
+        match ctx.create_radial_gradient(root.x - 12.0, root.y - 15.0, 4.0, root.x, root.y, HOUSE_ROOT_R) {
+            Ok(g) => {
+                g.add_color_stop(0.0, "#E8284A").ok();
+                g.add_color_stop(0.55, DEEP_RED).ok();
+                g.add_color_stop(1.0, "#4A0710").ok();
+                ctx.set_fill_style_canvas_gradient(&g);
+            }
+            Err(_) => ctx.set_fill_style_str(DEEP_RED),
+        }
+        ctx.fill();
+        ctx.set_shadow_blur(0.0);
+        if 14.0 * z >= 3.5 {
+            ctx.set_text_align("center");
+            ctx.set_fill_style_str("#FFFFFF");
+            ctx.set_font(FONT_ROOT);
+            ctx.fill_text(root.def.tr, root.x, root.y - 6.0).ok();
+            ctx.set_fill_style_str("rgba(255,255,255,0.78)");
+            ctx.set_font(FONT_ROOT_SUB);
+            ctx.fill_text("A1 → C2", root.x, root.y + 11.0).ok();
+        }
+    }
+
     fn dim(&self, n: &Node) -> f64 {
         if self.searching && !(n.matched || n.on_match_path || n.depth == 0) {
             0.2
@@ -728,6 +1017,11 @@ impl State {
         ctx.translate(-self.cx, -self.cy).ok();
 
         self.draw_grid();
+
+        if self.view == View::Levels {
+            self.render_house();
+            return;
+        }
 
         // Active branch: root → hovered (or selected) node.
         let mut on_path = vec![false; self.nodes.len()];
@@ -906,13 +1200,20 @@ pub struct App {
 impl App {
     /// `on_inspect(json)` is called whenever a rule should open in the drawer.
     #[wasm_bindgen(constructor)]
-    pub fn new(canvas: HtmlCanvasElement, on_inspect: js_sys::Function) -> Result<App, JsValue> {
+    /// `view` is `"levels"` for the house-of-floors view, anything else for
+    /// the radial map.
+    pub fn new(canvas: HtmlCanvasElement, on_inspect: js_sys::Function, view: &str) -> Result<App, JsValue> {
+        let view = if view == "levels" { View::Levels } else { View::Radial };
         let ctx = canvas
             .get_context("2d")?
             .ok_or_else(|| JsValue::from_str("2D canvas context unavailable"))?
             .dyn_into::<CanvasRenderingContext2d>()?;
         let mut nodes = Vec::new();
-        flatten(grammar_data::grammar(), None, 0, &mut nodes);
+        let tree = match view {
+            View::Radial => grammar_data::grammar(),
+            View::Levels => grammar_data::by_level(),
+        };
+        flatten(tree, None, 0, view, &mut nodes);
         let mut state = State {
             canvas,
             ctx,
@@ -943,9 +1244,17 @@ impl App {
             last_ts: 0.0,
             dirty: true,
             pending_inspect: None,
+            view,
+            reduced: false,
+            bands: Vec::new(),
+            bbox: (0.0, 0.0, 0.0, 0.0),
         };
         state.measure_labels();
         state.relayout();
+        if view == View::Levels {
+            // The house is shown already built; only later changes animate.
+            state.snap();
+        }
         Ok(App { inner: Rc::new(RefCell::new(state)), on_inspect, raf: Rc::new(RefCell::new(None)) })
     }
 
@@ -1061,6 +1370,14 @@ impl App {
         s.nodes.iter().position(|n| n.def.tr == title).map_or(-1, |i| i as i32)
     }
 
+    /// Turn animations off (`true`) or on. With animations off every change
+    /// is applied on the next frame without easing.
+    pub fn set_reduced_motion(&self, reduced: bool) {
+        let mut s = self.inner.borrow_mut();
+        s.reduced = reduced;
+        s.dirty = true;
+    }
+
     pub fn node_count(&self) -> usize {
         self.inner.borrow().nodes.len()
     }
@@ -1100,12 +1417,43 @@ mod tests {
     #[test]
     fn suffix_search_ignores_optional_parts() {
         let mut nodes = Vec::new();
-        flatten(grammar_data::grammar(), None, 0, &mut nodes);
+        flatten(grammar_data::grammar(), None, 0, View::Radial, &mut nodes);
         let hit = |q: &str| nodes.iter().filter(|x| fuzzy(&x.hay, &n(q))).map(|x| x.def.tr).collect::<Vec<_>>();
         assert!(hit("-yor").contains(&"-(I)yor"));
         assert!(hit("-acak").iter().any(|t| *t == "-(y)AcAk"));
         assert!(hit("Fıstıkçı").contains(&"Ünsüz Benzeşmesi"));
         assert!(hit("genitive").contains(&"İlgi Hâli -(n)In"));
+    }
+
+    #[test]
+    fn house_tree_lays_out_as_six_floors() {
+        let mut nodes = Vec::new();
+        flatten(grammar_data::by_level(), None, 0, View::Levels, &mut nodes);
+        assert_eq!(nodes[0].children.len(), 6);
+        assert_eq!(nodes[0].leaf_count, {
+            let mut radial = Vec::new();
+            flatten(grammar_data::grammar(), None, 0, View::Radial, &mut radial);
+            radial[0].leaf_count
+        });
+        for node in nodes.iter_mut() {
+            node.label_w = node.label().chars().count() as f64 * 7.5;
+            node.expanded = !node.children.is_empty();
+        }
+        let ln: Vec<LayoutNode> = nodes
+            .iter()
+            .map(|n| LayoutNode { children: n.children.clone(), expanded: n.expanded, extent: 0.0 })
+            .collect();
+        let widths: Vec<f64> = nodes.iter().map(|n| n.label_w).collect();
+        let house = layout::layout_floors(&ln, &widths, 0);
+        assert!(house.placed.iter().all(|p| p.visible));
+        assert_eq!(house.bands.len(), 6);
+        // A1 is the ground floor; every higher level sits above the one before.
+        let floors = &nodes[0].children;
+        assert_eq!(nodes[floors[0]].def.tr, "A1");
+        assert_eq!(nodes[floors[5]].def.tr, "C2");
+        for w in house.bands.windows(2) {
+            assert!(w[1].y + w[1].h < w[0].y);
+        }
     }
 
     #[test]
@@ -1123,7 +1471,7 @@ mod tests {
     #[test]
     fn real_tree_lays_out_without_overlap() {
         let mut nodes = Vec::new();
-        flatten(grammar_data::grammar(), None, 0, &mut nodes);
+        flatten(grammar_data::grammar(), None, 0, View::Radial, &mut nodes);
         assert!(nodes.len() > 110);
         for node in nodes.iter_mut() {
             node.label_w = node.def.tr.chars().count() as f64 * 7.5;

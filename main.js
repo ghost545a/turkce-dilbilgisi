@@ -317,7 +317,15 @@ async function main() {
       new Promise((resolve) => setTimeout(resolve, 2500)),
     ]).catch(() => {});
 
-    app = new App(canvas, openInspector);
+    // <body data-view="radial"> is the topic map, "levels" the house of floors.
+    app = new App(canvas, openInspector, document.body.dataset.view || 'radial');
+    // Respect the system "reduce motion" setting: changes apply without easing.
+    const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    app.set_reduced_motion(motion.matches);
+    motion.addEventListener('change', (e) => app.set_reduced_motion(e.matches));
+    // Console handle for debugging, e.g. grammarMap.focus(12).
+    window.grammarMap = app;
+
     resize();
     bind();
     app.start();
