@@ -1,3 +1,6 @@
 target/
 pkg/README.md
 pkg/.gitignore
+
+# Local benchmark clips (Google FLEURS, CC BY 4.0) - not published
+testdata/

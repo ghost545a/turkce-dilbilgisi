@@ -13,9 +13,17 @@ export class App {
     expand_all(): void;
     focus(id: number): void;
     /**
+     * Screen position of the ⓘ button, if shown (testing aid).
+     */
+    info_screen_pos(): Float64Array;
+    /**
      * Returns `true` if the key was handled.
      */
     key(key: string): boolean;
+    /**
+     * Changes whenever the visible tree changes (for the keyboard tree).
+     */
+    layout_version(): number;
     /**
      * `on_inspect(json)` is called whenever a rule should open in the drawer.
      * `view` is `"levels"` for the house-of-floors view, anything else for
@@ -40,15 +48,45 @@ export class App {
      */
     search(query: string): number;
     /**
+     * Highlights a node and brings it into view (keyboard navigation).
+     */
+    select(id: number): void;
+    /**
+     * Opens or closes a branch.
+     */
+    set_expanded(id: number, expanded: boolean): void;
+    /**
      * Turn animations off (`true`) or on. With animations off every change
      * is applied on the next frame without easing.
      */
     set_reduced_motion(reduced: boolean): void;
     /**
+     * Multiplies every map label size (1 = normal). Re-lays out the map.
+     */
+    set_text_scale(scale: number): void;
+    /**
+     * Height of the page's top bar, kept clear when the view is fitted.
+     */
+    set_top_inset(px: number): void;
+    /**
+     * Whether the latest input came from a touch screen (larger hit areas).
+     */
+    set_touch(touch: boolean): void;
+    /**
      * Start the `requestAnimationFrame` loop (idempotent).
      */
     start(): void;
+    /**
+     * Visible nodes in reading order, as JSON
+     * `[{id, parent, depth, tr, en, branch, expanded, count}]`.
+     */
+    tree_json(): string;
     wheel(x: number, y: number, delta_y: number): void;
+    /**
+     * Wheel with both axes: on the cards page it scrolls (Ctrl zooms);
+     * on the radial map it zooms at the cursor.
+     */
+    wheel_ex(x: number, y: number, delta_x: number, delta_y: number, ctrl: boolean): void;
 }
 
 /**
@@ -90,7 +128,9 @@ export interface InitOutput {
     readonly app_dblclick: (a: number, b: number, c: number) => void;
     readonly app_expand_all: (a: number) => void;
     readonly app_focus: (a: number, b: number) => void;
+    readonly app_info_screen_pos: (a: number) => [number, number];
     readonly app_key: (a: number, b: number, c: number) => number;
+    readonly app_layout_version: (a: number) => number;
     readonly app_new: (a: any, b: any, c: number, d: number) => [number, number, number];
     readonly app_node_count: (a: number) => number;
     readonly app_node_json: (a: number, b: number) => [number, number];
@@ -103,9 +143,16 @@ export interface InitOutput {
     readonly app_resize: (a: number, b: number, c: number, d: number) => void;
     readonly app_rule_id_by_title: (a: number, b: number, c: number) => number;
     readonly app_search: (a: number, b: number, c: number) => number;
+    readonly app_select: (a: number, b: number) => void;
+    readonly app_set_expanded: (a: number, b: number, c: number) => void;
     readonly app_set_reduced_motion: (a: number, b: number) => void;
+    readonly app_set_text_scale: (a: number, b: number) => void;
+    readonly app_set_top_inset: (a: number, b: number) => void;
+    readonly app_set_touch: (a: number, b: number) => void;
     readonly app_start: (a: number) => [number, number];
+    readonly app_tree_json: (a: number) => [number, number];
     readonly app_wheel: (a: number, b: number, c: number, d: number) => void;
+    readonly app_wheel_ex: (a: number, b: number, c: number, d: number, e: number, f: number) => void;
     readonly dict_search: (a: number, b: number, c: number, d: number) => [number, number];
     readonly parse_dual_srt: (a: number, b: number, c: number, d: number) => [number, number];
     readonly playerdictionary_lookup: (a: number, b: number, c: number) => [number, number];
@@ -116,9 +163,9 @@ export interface InitOutput {
     readonly __externref_table_alloc: () => number;
     readonly __wbindgen_externrefs: WebAssembly.Table;
     readonly __wbindgen_destroy_closure: (a: number, b: number) => void;
+    readonly __wbindgen_free: (a: number, b: number, c: number) => void;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
-    readonly __wbindgen_free: (a: number, b: number, c: number) => void;
     readonly __externref_table_dealloc: (a: number) => void;
     readonly __wbindgen_start: () => void;
 }

@@ -54,7 +54,8 @@ $env:CARGO_TARGET_DIR = "$env:TEMP\tgm-target"
 | `src/lib.rs` | State, camera, input, animation, search, rendering. |
 | `main/index.html`, `by-level/index.html` | The two pages; `<body data-view>` picks the view. |
 | `index.html` | Redirect to `main/`. |
-| `styles.css`, `main.js` | Shared HUD, drawers and the WASM bootstrapper. |
+| `styles.css`, `main.js` | Shared HUD and the WASM bootstrapper for the maps. |
+| `ui.js` | Shared springs, drawers, dialogs and focus handling (all pages). |
 | `src/player/` | SRT parser and Turkish-aware dictionary lookup for the player (ported from the desktop app). |
 | `player/` | The player page: `player.js` (playback, subtitles, saved words), `autosubs.js` + `asr-worker.js` + `audio-utils.js` (automatic subtitles), `tr_en_dictionary.tsv`, `samples/`. |
 
@@ -65,5 +66,6 @@ $env:CARGO_TARGET_DIR = "$env:TEMP\tgm-target"
 ## Player data and models
 
 - `player/tr_en_dictionary.tsv` comes from the [kaikki.org](https://kaikki.org/dictionary/Turkish/) extract of English Wiktionary and is available under CC BY-SA 4.0 and the GFDL.
+- Turkish-only speech models **seda v0.2** and **seda v0.2-tiny** by atasoglu ([Hugging Face](https://huggingface.co/atasoglu/seda-v0.2), CC BY-SA 4.0) run in the browser with the official [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) v1.13.7 WebAssembly build (Apache-2.0, vendored in `player/vendor/sherpa-onnx/`); the model files are downloaded from Hugging Face on first use.
 - Automatic subtitles on the visitor's device use [Transformers.js](https://github.com/huggingface/transformers.js) 3.8.1 from jsDelivr, the multilingual Whisper models from `onnx-community` (MIT) and `Xenova/opus-mt-tr-en` (Apache 2.0), downloaded from Hugging Face on first use; desktop Chrome's built-in translator is used when available.
 - YouTube videos can be studied with your own `.srt` files, but cannot be subtitled automatically: other websites cannot read YouTube's audio.

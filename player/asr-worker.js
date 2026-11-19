@@ -21,14 +21,28 @@ function progressFor(stage) {
   };
 }
 
-async function loadAsr(size, webgpu) {
-  const key = `${size}:${webgpu}`;
+const MODELS = {
+  tiny: 'onnx-community/whisper-tiny',
+  base: 'onnx-community/whisper-base',
+  small: 'onnx-community/whisper-small',
+  turbo: 'onnx-community/whisper-large-v3-turbo',
+};
+
+async function loadAsr(size, webgpu, f16) {
+  const key = `${size}:${webgpu}:${f16}`;
   if (asr && asrKey === key) return asr;
   asr = null;
-  const options = webgpu
-    ? { device: 'webgpu', dtype: { encoder_model: 'fp32', decoder_model_merged: 'q4' } }
-    : { device: 'wasm', dtype: 'q8' };
-  asr = await pipeline('automatic-speech-recognition', `onnx-community/whisper-${size}`, {
+  let options;
+  if (size === 'turbo') {
+    // Large model: 4-bit weights keep the download near 540 MB (720 MB without 16-bit GPU floats).
+    if (!webgpu) throw new Error('The Turbo model needs a graphics card (WebGPU). Choose Base or Small instead.');
+    options = { device: 'webgpu', dtype: f16 ? { encoder_model: 'q4f16', decoder_model_merged: 'q4f16' } : { encoder_model: 'q4', decoder_model_merged: 'q4' } };
+  } else {
+    options = webgpu
+      ? { device: 'webgpu', dtype: { encoder_model: 'fp32', decoder_model_merged: 'q4' } }
+      : { device: 'wasm', dtype: 'q8' };
+  }
+  asr = await pipeline('automatic-speech-recognition', MODELS[size], {
     ...options,
     progress_callback: progressFor('asr'),
   });
@@ -36,14 +50,14 @@ async function loadAsr(size, webgpu) {
   return asr;
 }
 
-async function transcribe({ audio, size, webgpu }) {
+async function transcribe({ audio, size, webgpu, f16 }) {
   let model;
   try {
-    model = await loadAsr(size, webgpu);
+    model = await loadAsr(size, webgpu, f16);
   } catch (e) {
-    if (!webgpu) throw e;
+    if (!webgpu || size === 'turbo') throw e;
     post({ type: 'note', text: 'The graphics card could not run the model; using the CPU instead (slower).' });
-    model = await loadAsr(size, false);
+    model = await loadAsr(size, false, false);
   }
   const blocks = splitAtQuiet(audio, RATE, BLOCK_SEC);
   const segments = [];

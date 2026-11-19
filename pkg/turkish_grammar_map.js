@@ -37,6 +37,16 @@ export class App {
         wasm.app_focus(this.__wbg_ptr, id);
     }
     /**
+     * Screen position of the ⓘ button, if shown (testing aid).
+     * @returns {Float64Array}
+     */
+    info_screen_pos() {
+        const ret = wasm.app_info_screen_pos(this.__wbg_ptr);
+        var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+        return v1;
+    }
+    /**
      * Returns `true` if the key was handled.
      * @param {string} key
      * @returns {boolean}
@@ -46,6 +56,14 @@ export class App {
         const len0 = WASM_VECTOR_LEN;
         const ret = wasm.app_key(this.__wbg_ptr, ptr0, len0);
         return ret !== 0;
+    }
+    /**
+     * Changes whenever the visible tree changes (for the keyboard tree).
+     * @returns {number}
+     */
+    layout_version() {
+        const ret = wasm.app_layout_version(this.__wbg_ptr);
+        return ret >>> 0;
     }
     /**
      * `on_inspect(json)` is called whenever a rule should open in the drawer.
@@ -158,12 +176,48 @@ export class App {
         return ret >>> 0;
     }
     /**
+     * Highlights a node and brings it into view (keyboard navigation).
+     * @param {number} id
+     */
+    select(id) {
+        wasm.app_select(this.__wbg_ptr, id);
+    }
+    /**
+     * Opens or closes a branch.
+     * @param {number} id
+     * @param {boolean} expanded
+     */
+    set_expanded(id, expanded) {
+        wasm.app_set_expanded(this.__wbg_ptr, id, expanded);
+    }
+    /**
      * Turn animations off (`true`) or on. With animations off every change
      * is applied on the next frame without easing.
      * @param {boolean} reduced
      */
     set_reduced_motion(reduced) {
         wasm.app_set_reduced_motion(this.__wbg_ptr, reduced);
+    }
+    /**
+     * Multiplies every map label size (1 = normal). Re-lays out the map.
+     * @param {number} scale
+     */
+    set_text_scale(scale) {
+        wasm.app_set_text_scale(this.__wbg_ptr, scale);
+    }
+    /**
+     * Height of the page's top bar, kept clear when the view is fitted.
+     * @param {number} px
+     */
+    set_top_inset(px) {
+        wasm.app_set_top_inset(this.__wbg_ptr, px);
+    }
+    /**
+     * Whether the latest input came from a touch screen (larger hit areas).
+     * @param {boolean} touch
+     */
+    set_touch(touch) {
+        wasm.app_set_touch(this.__wbg_ptr, touch);
     }
     /**
      * Start the `requestAnimationFrame` loop (idempotent).
@@ -175,12 +229,41 @@ export class App {
         }
     }
     /**
+     * Visible nodes in reading order, as JSON
+     * `[{id, parent, depth, tr, en, branch, expanded, count}]`.
+     * @returns {string}
+     */
+    tree_json() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const ret = wasm.app_tree_json(this.__wbg_ptr);
+            deferred1_0 = ret[0];
+            deferred1_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+        }
+    }
+    /**
      * @param {number} x
      * @param {number} y
      * @param {number} delta_y
      */
     wheel(x, y, delta_y) {
         wasm.app_wheel(this.__wbg_ptr, x, y, delta_y);
+    }
+    /**
+     * Wheel with both axes: on the cards page it scrolls (Ctrl zooms);
+     * on the radial map it zooms at the cursor.
+     * @param {number} x
+     * @param {number} y
+     * @param {number} delta_x
+     * @param {number} delta_y
+     * @param {boolean} ctrl
+     */
+    wheel_ex(x, y, delta_x, delta_y, ctrl) {
+        wasm.app_wheel_ex(this.__wbg_ptr, x, y, delta_x, delta_y, ctrl);
     }
 }
 if (Symbol.dispose) App.prototype[Symbol.dispose] = App.prototype.free;
@@ -384,6 +467,10 @@ function __wbg_get_imports() {
         __wbg_moveTo_b4cd3b0b7e1585a5: function(arg0, arg1, arg2) {
             arg0.moveTo(arg1, arg2);
         },
+        __wbg_now_463ac581d2fc7ea3: function() {
+            const ret = Date.now();
+            return ret;
+        },
         __wbg_requestAnimationFrame_9ba49d36a19ca83c: function() { return handleError(function (arg0, arg1) {
             const ret = arg0.requestAnimationFrame(arg1);
             return ret;
@@ -517,6 +604,19 @@ const CLOSURE_DTORS = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(state => wasm.__wbindgen_destroy_closure(state.a, state.b));
 
+function getArrayF64FromWasm0(ptr, len) {
+    ptr = ptr >>> 0;
+    return getFloat64ArrayMemory0().subarray(ptr / 8, ptr / 8 + len);
+}
+
+let cachedFloat64ArrayMemory0 = null;
+function getFloat64ArrayMemory0() {
+    if (cachedFloat64ArrayMemory0 === null || cachedFloat64ArrayMemory0.byteLength === 0) {
+        cachedFloat64ArrayMemory0 = new Float64Array(wasm.memory.buffer);
+    }
+    return cachedFloat64ArrayMemory0;
+}
+
 function getStringFromWasm0(ptr, len) {
     ptr = ptr >>> 0;
     return decodeText(getUint8ArrayMemory0().subarray(ptr, ptr + len));
@@ -648,6 +748,7 @@ function __wbg_finalize_init(instance, module) {
     wasmInstance = instance;
     wasm = instance.exports;
     wasmModule = module;
+    cachedFloat64ArrayMemory0 = null;
     cachedUint8ArrayMemory0 = null;
     wasm.__wbindgen_start();
     return wasm;

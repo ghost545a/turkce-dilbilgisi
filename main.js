@@ -1,6 +1,7 @@
 // Thin bootstrapper: loads the WASM module, forwards DOM events to it and
 // renders the Rule Inspector drawer from the JSON the Rust side hands back.
 import init, { App, dict_search } from './pkg/turkish_grammar_map.js';
+import { Drawer, trackHudHeight } from './ui.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('map');
@@ -18,6 +19,20 @@ const dictButton = $('btn-dict');
 
 let app = null;
 let dictKind = 'verbs';
+
+const inspectorDrawer = new Drawer(drawer, {
+  side: 'right',
+  initialFocus: () => $('inspector-close'),
+  onClose: () => app && app.clear_selection(),
+  // Back to the keyboard tree item if the details were opened from it (it may
+  // have been re-rendered since), otherwise to the map.
+  returnFocus: () => {
+    const fromTree = openedFromTree;
+    openedFromTree = false;
+    return (fromTree && document.querySelector(`#a11y-tree [data-id="${treeFocus}"]`)) || canvas;
+  },
+});
+const dictDrawer = new Drawer(dict, { side: 'left', button: $('btn-dict'), initialFocus: () => dictInput });
 
 // Which grammar rule explains each case a verb can govern.
 const CASE_RULES = {
@@ -117,15 +132,11 @@ function openInspector(json) {
   }
 
   drawerBody.scrollTop = 0;
-  drawer.classList.add('open');
-  drawer.setAttribute('aria-hidden', 'false');
-  document.body.classList.add('drawer-open');
+  inspectorDrawer.open();
 }
 
 function closeInspector() {
-  drawer.classList.remove('open');
-  drawer.setAttribute('aria-hidden', 'true');
-  document.body.classList.remove('drawer-open');
+  inspectorDrawer.close();
 }
 
 /** Chip that jumps to the grammar rule with the given Turkish title. */
@@ -185,14 +196,104 @@ function renderDict() {
 }
 
 function setDictOpen(open) {
-  dict.classList.toggle('open', open);
-  dict.setAttribute('aria-hidden', String(!open));
-  dictButton.setAttribute('aria-expanded', String(open));
-  document.body.classList.toggle('dict-open', open);
   if (open) {
     if (!dictList.children.length) renderDict();
-    dictInput.focus();
+    dictDrawer.open();
+  } else {
+    dictDrawer.close();
   }
+}
+
+// ───────────── keyboard / screen-reader tree mirroring the map ─────────────
+
+const tree = $('a11y-tree');
+let treeVersion = -1;
+let openedFromTree = false;
+let treeFocus = 0;
+let treeNodes = [];
+
+function renderTree(force) {
+  const v = app.layout_version();
+  if (v === treeVersion && !force) return;
+  treeVersion = v;
+  treeNodes = JSON.parse(app.tree_json());
+  const hadFocus = tree.contains(document.activeElement);
+  if (!treeNodes.some((n) => n.id === treeFocus)) treeFocus = treeNodes[0] ? treeNodes[0].id : 0;
+  tree.replaceChildren(...treeNodes.map((n) => {
+    const item = el('div', 'tree-item');
+    item.setAttribute('role', 'treeitem');
+    item.setAttribute('aria-level', String(n.depth + 1));
+    if (n.branch) item.setAttribute('aria-expanded', String(n.expanded));
+    item.dataset.id = n.id;
+    item.tabIndex = n.id === treeFocus ? 0 : -1;
+    if (n.id === treeFocus && hadFocus) item.classList.add('current');
+    item.textContent = n.branch ? `${n.tr} — ${n.en}, ${n.count} rules` : `${n.tr} — ${n.en}`;
+    item.lang = 'tr';
+    return item;
+  }));
+  if (hadFocus) tree.querySelector(`[data-id="${treeFocus}"]`)?.focus();
+}
+
+function focusTreeItem(id) {
+  treeFocus = id;
+  tree.querySelectorAll('[role="treeitem"]').forEach((it) => { it.tabIndex = Number(it.dataset.id) === id ? 0 : -1; });
+  tree.querySelector(`[data-id="${id}"]`)?.focus();
+  app.select(id);
+}
+
+function bindTree() {
+  document.querySelector('.skip-link')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    renderTree(true);
+    focusTreeItem(treeFocus);
+  });
+  tree.addEventListener('focusin', (e) => {
+    const id = Number(e.target.dataset && e.target.dataset.id);
+    if (Number.isFinite(id)) {
+      treeFocus = id;
+      tree.querySelectorAll('.current').forEach((it) => it.classList.remove('current'));
+      e.target.classList.add('current');
+      app.select(id);
+    }
+  });
+  tree.addEventListener('keydown', (e) => {
+    const i = treeNodes.findIndex((n) => n.id === treeFocus);
+    if (i < 0) return;
+    const n = treeNodes[i];
+    const move = (j) => { if (treeNodes[j]) focusTreeItem(treeNodes[j].id); };
+    switch (e.key) {
+      case 'ArrowDown': move(i + 1); break;
+      case 'ArrowUp': move(i - 1); break;
+      case 'Home': move(0); break;
+      case 'End': move(treeNodes.length - 1); break;
+      case 'ArrowRight':
+        if (n.branch && !n.expanded) app.set_expanded(n.id, true);
+        else if (n.branch) move(i + 1);
+        break;
+      case 'ArrowLeft':
+        if (n.branch && n.expanded && n.depth > 0) app.set_expanded(n.id, false);
+        else if (n.parent !== null && n.parent !== undefined) focusTreeItem(n.parent);
+        break;
+      case 'Enter': case ' ': openedFromTree = true; app.focus(n.id); break;
+      default: return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    renderTree();
+  });
+  setInterval(() => renderTree(), 250);
+}
+
+// ───────────── text size ─────────────
+
+const TEXT_KEY = 'trlearn.textScale';
+function rootScale() {
+  return (parseFloat(getComputedStyle(document.documentElement).fontSize) || 16) / 16;
+}
+function applyTextScale(choice) {
+  try { localStorage.setItem(TEXT_KEY, String(choice)); } catch { /* storage blocked */ }
+  document.querySelectorAll('[data-text-scale]').forEach((b) => b.setAttribute('aria-pressed', String(Number(b.dataset.textScale) === choice)));
+  app.set_text_scale(choice * rootScale());
 }
 
 function local(e) {
@@ -207,11 +308,13 @@ function resize() {
 function bind() {
   canvas.addEventListener('pointerdown', (e) => {
     if (e.button !== 0 && e.pointerType === 'mouse') return;
+    app.set_touch(e.pointerType === 'touch');
     canvas.setPointerCapture(e.pointerId);
     canvas.classList.add('dragging');
     app.pointer_down(e.pointerId, ...local(e));
   });
   canvas.addEventListener('pointermove', (e) => {
+    if (e.pointerType !== 'touch') app.set_touch(false);
     const over = app.pointer_move(e.pointerId, ...local(e));
     canvas.classList.toggle('pointing', over);
   });
@@ -232,8 +335,8 @@ function bind() {
   canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
     const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? canvas.clientHeight : 1;
-    // Trackpad pinch arrives as ctrl+wheel with small deltas; boost it.
-    app.wheel(...local(e), e.deltaY * unit * (e.ctrlKey ? 4 : 1));
+    // Trackpad pinch arrives as ctrl+wheel; on the cards page plain wheel scrolls.
+    app.wheel_ex(...local(e), e.deltaX * unit, e.deltaY * unit, e.ctrlKey || e.metaKey);
   }, { passive: false });
 
   window.addEventListener('resize', resize);
@@ -243,29 +346,30 @@ function bind() {
         dictInput.value = '';
         renderDict();
         return;
-      } else if (dict.classList.contains('open') && dict.contains(document.activeElement)) {
+      } else if (dictDrawer.isOpen && dict.contains(document.activeElement)) {
         setDictOpen(false);
-        document.activeElement.blur();
         return;
       } else if (document.activeElement === searchInput && searchInput.value) {
         searchInput.value = '';
         runSearch();
-      } else if (drawer.classList.contains('open')) {
+      } else if (inspectorDrawer.isOpen) {
         closeInspector();
-        app.clear_selection();
+      } else if (dictDrawer.isOpen) {
+        setDictOpen(false);
       }
       searchInput.blur();
       return;
     }
     const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement;
     if (typing || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.target instanceof Element && e.target.closest('#a11y-tree, .inspector, .dictionary') && e.key.startsWith('Arrow')) return;
     if (e.key === '/' || e.key === 'f' || e.key === 'F') {
       e.preventDefault();
       searchInput.focus();
       searchInput.select();
     } else if (e.key === 'd' || e.key === 'D') {
       e.preventDefault();
-      setDictOpen(!dict.classList.contains('open'));
+      setDictOpen(!dictDrawer.isOpen);
     } else if (app.key(e.key)) {
       e.preventDefault();
     }
@@ -274,13 +378,11 @@ function bind() {
   $('btn-expand').addEventListener('click', () => app.expand_all());
   $('btn-collapse').addEventListener('click', () => app.collapse_all());
   $('btn-reset').addEventListener('click', () => app.reset_camera());
-  $('inspector-close').addEventListener('click', () => {
-    closeInspector();
-    app.clear_selection();
-  });
+  $('inspector-close').addEventListener('click', () => closeInspector());
   searchInput.addEventListener('input', runSearch);
 
-  dictButton.addEventListener('click', () => setDictOpen(!dict.classList.contains('open')));
+  dictButton.addEventListener('click', () => setDictOpen(!dictDrawer.isOpen));
+  document.querySelectorAll('[data-text-scale]').forEach((b) => b.addEventListener('click', () => applyTextScale(Number(b.dataset.textScale))));
   $('dict-close').addEventListener('click', () => setDictOpen(false));
   dictInput.addEventListener('input', renderDict);
   for (const tab of dict.querySelectorAll('[role="tab"]')) {
@@ -328,6 +430,18 @@ async function main() {
 
     resize();
     bind();
+    trackHudHeight();
+    // Keep the cards page clear of the top bar, which is taller on phones.
+    const hud = document.querySelector('.hud');
+    const inset = () => app.set_top_inset(hud.getBoundingClientRect().bottom + 12);
+    inset();
+    new ResizeObserver(inset).observe(hud);
+    let saved = 1;
+    try { saved = Number(localStorage.getItem(TEXT_KEY)) || 1; } catch { /* storage blocked */ }
+    if (saved !== 1 || rootScale() !== 1) applyTextScale(saved);
+    else document.querySelector('[data-text-scale="1"]')?.setAttribute('aria-pressed', 'true');
+    bindTree();
+    renderTree();
     app.start();
     statusEl.classList.add('hidden');
   } catch (err) {

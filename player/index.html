@@ -24,9 +24,9 @@
     </div>
     <div class="actions">
       <button id="btn-open" type="button" title="Open a lesson (O)">Open</button>
-      <button id="btn-auto" type="button" title="Create subtitles automatically">Auto subtitles</button>
-      <button id="btn-share" type="button" title="Copy a link to this lesson">Copy link</button>
-      <button id="btn-words" type="button" class="accent" title="Saved words (W)" aria-expanded="false" aria-controls="words">Saved words <span id="words-count" class="count">0</span></button>
+      <button id="btn-auto" type="button" title="Create subtitles automatically"><span class="l">Auto subtitles</span><span class="s">Auto subs</span></button>
+      <button id="btn-share" type="button" title="Copy a link to this lesson"><span class="l">Copy link</span><span class="s">Link</span></button>
+      <button id="btn-words" type="button" class="accent" title="Saved words (W)" aria-expanded="false" aria-controls="words"><span class="l">Saved words</span><span class="s">Words</span> <span id="words-count" class="count">0</span></button>
     </div>
   </header>
 
@@ -140,13 +140,18 @@
         <label class="field">
           <span>Speech model</span>
           <select id="asr-model">
-            <option value="tiny">Tiny — fastest, least accurate (about 40–110 MB)</option>
-            <option value="base" selected>Base — balanced (about 75–195 MB)</option>
-            <option value="small">Small — most accurate, slowest (about 240–560 MB)</option>
+            <optgroup label="Turkish-only (seda) — any computer, no punctuation">
+              <option value="seda-v0.2" selected>Seda — 15 % word errors in our test · 71 MB</option>
+              <option value="seda-tiny">Seda tiny — 21 % · 7 MB · fastest</option>
+            </optgroup>
+            <optgroup label="Whisper — with punctuation">
+              <option value="small">Whisper Small — 22 % · about 240–560 MB</option>
+              <option value="turbo">Whisper Turbo — 9 % · about 540 MB · needs a graphics card, slow</option>
+            </optgroup>
           </select>
         </label>
         <p class="muted small" id="device-info"></p>
-        <p class="muted small">Models download once from Hugging Face and are cached by the browser. Nothing you play leaves this device.</p>
+        <p class="muted small">Word-error figures are from our test on 24 Turkish news-style clips (Google FLEURS); real videos vary. Models download once from Hugging Face and are normally cached by the browser. Nothing you play leaves this device.</p>
       </div>
 
       <div id="auto-api" class="auto-pane" hidden>
@@ -202,6 +207,7 @@
         <label class="file-button">Import<input id="words-import" type="file" accept=".json,application/json"></label>
       </div>
       <p class="muted small">Kept in this browser only. Export makes a <code>vocabulary.json</code> that the TRLearn desktop app also reads.</p>
+      <label class="check small"><input id="autosave" type="checkbox"> Save every word I click, like the desktop app</label>
     </div>
     <ul id="words-list" class="words-list"></ul>
     <p id="words-empty" class="words-empty">Click a Turkish word in the subtitles, then <b>Save word</b>.</p>
@@ -212,6 +218,7 @@
   <footer class="credit">
     Dictionary: English Wiktionary via <a href="https://kaikki.org/dictionary/Turkish/" target="_blank" rel="noopener">kaikki.org</a>, <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>.
     Web version of the <a href="https://github.com/ghost545a/trlearn-player" target="_blank" rel="noopener">TRLearn desktop player</a>.
+    Turkish speech models: <a href="https://huggingface.co/atasoglu/seda-v0.2" target="_blank" rel="noopener">seda</a> by atasoglu (<a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>), run with <a href="https://github.com/k2-fsa/sherpa-onnx" target="_blank" rel="noopener">sherpa-onnx</a> (Apache-2.0); Whisper (MIT) and opus-mt-tr-en (Apache-2.0) with Transformers.js.
   </footer>
 
   <div id="status" class="status hidden"></div>

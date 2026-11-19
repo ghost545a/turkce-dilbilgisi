@@ -39,11 +39,19 @@
     </div>
   </header>
 
+  <a class="skip-link" href="#a11y-tree">Browse the rules with the keyboard</a>
+  <div id="a11y-tree" class="sr-tree" role="tree" aria-label="Grammar rules (arrow keys move, Right opens, Left closes, Enter shows details)"></div>
   <footer class="hint">
-    <span><b>Scroll</b> zoom</span>
-    <span><b>Drag</b> pan</span>
-    <span><b>Click</b> a floor to fold it, a topic to open it, a rule to read it</span>
-    <span><b>Double-click</b> inspect a floor or topic</span>
+    <span><b>Scroll</b> move</span>
+    <span><b>Ctrl + scroll</b> zoom</span>
+    <span><b>Click</b> a level to fold it, a topic to open it, a rule to read it</span>
+    <span><b>ⓘ</b> or <b>I</b> details</span>
+    <span class="text-size" role="group" aria-label="Text size">
+      <span>Text</span>
+      <button type="button" data-text-scale="1" aria-label="Normal text">A</button>
+      <button type="button" data-text-scale="1.2" aria-label="Larger text">A</button>
+      <button type="button" data-text-scale="1.4" aria-label="Largest text">A</button>
+    </span>
     <span><b>D</b> dictionary</span>
   </footer>
 

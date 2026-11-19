@@ -59,6 +59,10 @@ export function setupAutoSubs(ctx) {
   const mode = () => document.querySelector('input[name="auto-mode"]:checked').value;
 
   const hasGpu = 'gpu' in navigator;
+  if (!hasGpu) {
+    const turbo = document.querySelector('#asr-model option[value="turbo"]');
+    if (turbo) { turbo.disabled = true; turbo.textContent += ' — not available in this browser'; }
+  }
   $('device-info').textContent = hasGpu
     ? 'Your browser supports WebGPU, so the speech model can run on your graphics card.'
     : 'Your browser has no WebGPU, so the speech model runs on the processor. Expect several minutes per minute of video with the larger models.';
@@ -78,7 +82,7 @@ export function setupAutoSubs(ctx) {
   }
   $('btn-auto').addEventListener('click', () => {
     refreshDialog();
-    $('auto-dialog').hidden = false;
+    ctx.openModal('auto-dialog');
   });
   document.addEventListener('lesson-media', () => {
     result = null;
@@ -123,11 +127,12 @@ export function setupAutoSubs(ctx) {
     }
 
     const abort = new AbortController();
-    let worker = null, translator = null;
+    let worker = null, speechWorker = null, translator = null;
     job = {
       cancel() {
         abort.abort();
         worker?.terminate();
+        speechWorker?.terminate();
         translator?.destroy?.();
       },
     };
@@ -161,8 +166,19 @@ export function setupAutoSubs(ctx) {
 
       let segments, english;
       if (runMode === 'device') {
-        worker = new Worker(new URL('./asr-worker.js', import.meta.url), { type: 'module' });
-        segments = await deviceTranscribe(worker, audio, $('asr-model').value, hasGpu, setProgress);
+        const model = $('asr-model').value;
+        if (model.startsWith('seda')) {
+          // Turkish-only seda models run in sherpa-onnx (a classic worker);
+          // translation still uses the Transformers.js worker.
+          speechWorker = new Worker(new URL('./seda-worker.js', import.meta.url));
+          segments = await sedaTranscribe(speechWorker, audio, model.replace('seda-', ''), setProgress);
+          speechWorker.terminate();
+          speechWorker = null;
+          worker = new Worker(new URL('./asr-worker.js', import.meta.url), { type: 'module' });
+        } else {
+          worker = new Worker(new URL('./asr-worker.js', import.meta.url), { type: 'module' });
+          segments = await deviceTranscribe(worker, audio, model, hasGpu, setProgress);
+        }
         segments = tidySegments(segments, totalSec);
         if (!segments.length) throw new Error('No Turkish speech was recognised in this video.');
         const lines = segments.map((s) => s.text);
@@ -197,6 +213,7 @@ export function setupAutoSubs(ctx) {
       finish(abort.signal.aborted ? new Cancelled() : e);
     } finally {
       worker?.terminate();
+      speechWorker?.terminate();
       translator?.destroy?.();
     }
   });
@@ -253,14 +270,39 @@ function downloadTracker(setProgress, from, to, label) {
   };
 }
 
+async function gpuHasF16() {
+  try { const a = await navigator.gpu?.requestAdapter(); return Boolean(a && a.features.has('shader-f16')); } catch { return false; }
+}
+
 async function deviceTranscribe(worker, audio, size, webgpu, setProgress) {
+  const f16 = webgpu && size === 'turbo' ? await gpuHasF16() : false;
   const onDownload = downloadTracker(setProgress, 0.02, 0.25, 'Downloading the speech model…');
   setProgress(0.02, 'Loading the speech model…');
   const copy = audio.slice(); // the decoded audio is cached and shared, so the worker gets a copy
-  const result = await workerCall(worker, { type: 'asr', audio: copy, size, webgpu }, [copy.buffer], (d) => {
+  const result = await workerCall(worker, { type: 'asr', audio: copy, size, webgpu, f16 }, [copy.buffer], (d) => {
     if (d.type === 'download' && d.stage === 'asr') onDownload(d);
     else if (d.type === 'note') setProgress(0.25, d.text);
     else if (d.type === 'asr') setProgress(0.25 + 0.55 * (d.done / d.total), `Listening… part ${Math.min(d.done + 1, d.total)} of ${d.total}${d.partial ? ` · ${d.partial} lines so far` : ''}`);
+  });
+  return result.segments;
+}
+
+async function sedaTranscribe(worker, audio, size, setProgress) {
+  const onDownload = downloadTracker(setProgress, 0.02, 0.2, 'Downloading the Turkish speech model…');
+  setProgress(0.02, 'Loading the Turkish speech model…');
+  // seda returns text without timings, so each stretch of speech between
+  // pauses is decoded on its own and becomes one subtitle line.
+  // Join stretches separated by short pauses into lines of up to 8 s, so
+  // each line reads (and translates) as a phrase rather than a fragment.
+  const pieces = [];
+  for (const p of speechPieces(audio, RATE, 8)) {
+    const last = pieces[pieces.length - 1];
+    if (last && p.start - last.end < 0.7 * RATE && p.end - last.start <= 8 * RATE) last.end = p.end;
+    else pieces.push({ ...p });
+  }
+  const result = await workerCall(worker, { type: 'asr', audio, pieces, size }, [], (d) => {
+    if (d.type === 'download') onDownload(d);
+    else if (d.type === 'asr') setProgress(0.2 + 0.6 * (d.done / d.total), `Listening… ${d.done} of ${d.total} stretches of speech${d.partial ? ` · ${d.partial} lines` : ''}`);
   });
   return result.segments;
 }

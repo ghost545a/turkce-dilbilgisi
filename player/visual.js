@@ -88,7 +88,7 @@ export class AudioVisual {
     this.lastStrip = '';
     this.bindStrip();
     new ResizeObserver(() => { this.lastStrip = ''; this.sizeCanvases(); }).observe(this.strip);
-    new ResizeObserver(() => this.sizeCanvases()).observe(this.live);
+    new ResizeObserver(() => { this.sizeCanvases(); this.wake(); }).observe(this.live);
   }
 
   /** Starts the visuals for an audio-only source. */
@@ -142,16 +142,26 @@ export class AudioVisual {
     this.lastStrip = '';
   }
 
+  /** Runs the drawing loop while playing; it sleeps once paused and settled. */
   start() {
     if (this.running) return;
     this.running = true;
+    let quiet = 0;
     const loop = (now) => {
       if (!this.running) return;
       this.drawLive(now / 1000);
       this.drawStrip();
+      const settled = this.levels.every((v) => Math.abs(v - 0.1) < 0.002);
+      quiet = this.isPaused() && settled && !this.dragging ? quiet + 1 : 0;
+      if (quiet > 2) { this.running = false; return; }
       requestAnimationFrame(loop);
     };
     requestAnimationFrame(loop);
+  }
+
+  /** Redraws after play, pause, seeking or a resize. */
+  wake() {
+    if (!this.live.hidden) { this.lastStrip = ''; this.start(); }
   }
 
   // ── live ring ──
@@ -177,9 +187,9 @@ export class AudioVisual {
       }
       energy /= BARS;
     } else {
+      // Paused: settle to a still ring (no slow looping motion).
       for (let b = 0; b < BARS; b++) {
-        const idle = still ? 0.12 : 0.1 + 0.05 * Math.sin(now * 1.3 + b * 0.45);
-        this.levels[b] += (idle - this.levels[b]) * (still ? 1 : 0.08);
+        this.levels[b] += (0.1 - this.levels[b]) * (still ? 1 : 0.12);
         energy += this.levels[b];
       }
       energy /= BARS;
@@ -305,6 +315,9 @@ export class AudioVisual {
     const end = (e) => {
       this.dragging = false;
       if (this.strip.hasPointerCapture?.(e.pointerId)) this.strip.releasePointerCapture(e.pointerId);
+      const r = this.strip.getBoundingClientRect();
+      const inside = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+      if (!inside || e.pointerType === 'touch') { this.hover = null; this.tip.hidden = true; this.lastStrip = ''; }
     };
     this.strip.addEventListener('pointerup', end);
     this.strip.addEventListener('pointercancel', end);

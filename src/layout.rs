@@ -115,34 +115,37 @@ pub fn layout(nodes: &[LayoutNode], root: usize) -> Vec<Placed> {
     out
 }
 
-// ───────────────────────── House-of-floors layout ─────────────────────────
+// ───────────────────────── "Study by level" cards ─────────────────────────
 //
-// Used by the "study by level" view. The tree is root → floors → rooms →
-// rules. Floors are horizontal bands stacked upwards (the first floor is the
-// ground floor, so it has the largest y); inside a floor the rooms flow left
-// to right and wrap; inside an open room the rules are listed in columns of
-// at most `MAX_ROWS`. Labels are horizontal and start `DOT` to the right of
-// the node, so a label's box is [x, x + DOT + width] × [y ± ROW / 2].
+// The tree is root → levels → topics → rules. Each level is a card, stacked
+// top to bottom (A1 first). A card has a badge column on the left and a grid
+// of equally wide topic tiles on the right. An open topic spans the whole row
+// and lists its rules in aligned columns. A folded level shrinks to one row.
 
-/// Vertical distance between two rules in a column.
-pub const ROW: f64 = 24.0;
-/// Horizontal space reserved for a node's dot before its label starts.
-pub const DOT: f64 = 22.0;
-/// Extra width reserved after a floor or room title for its rule count.
-pub const COUNT_W: f64 = 64.0;
-/// Height of the roof drawn above the top floor.
-pub const ROOF_H: f64 = 170.0;
+/// Width of the badge column on the left of each card.
+pub const BADGE_W: f64 = 184.0;
+/// Height of a topic tile's header row.
+pub const TILE_H: f64 = 44.0;
+/// Height of one rule row inside an open topic.
+pub const RULE_ROW: f64 = 26.0;
+/// Space a rule's bullet takes before its label.
+pub const BULLET_W: f64 = 14.0;
+/// Room reserved at the right of a tile header for count, ⓘ and chevron.
+pub const TILE_TAIL: f64 = 92.0;
+/// Height of a folded card.
+pub const FOLDED_H: f64 = 64.0;
+/// Height of the page title above the first card.
+pub const HEADER_H: f64 = 86.0;
+const BADGE_MIN_H: f64 = 140.0;
+const TILE_GAP: f64 = 10.0;
+const CARD_PAD: f64 = 20.0;
+const CARD_GAP: f64 = 16.0;
+const COLS: usize = 3;
 const MAX_ROWS: usize = 8;
-const COL_GAP: f64 = 26.0;
-const ROOM_GAP: f64 = 34.0;
-const PAD: f64 = 20.0;
-const TITLE_H: f64 = 54.0;
-const HEAD_H: f64 = 30.0;
-const FLOOR_GAP: f64 = 12.0;
-const MAX_ROW_W: f64 = 1500.0;
-const MIN_W: f64 = 760.0;
+const RULE_COL_GAP: f64 = 28.0;
+const MIN_TILE_W: f64 = 220.0;
 
-/// Rectangle of one floor, in world units.
+/// An axis-aligned rectangle owned by a node (a card or a tile).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Band {
     pub node: usize,
@@ -154,85 +157,113 @@ pub struct Band {
 
 pub struct Floors {
     pub placed: Vec<Placed>,
-    /// One band per visible floor, ground floor first.
+    /// Narrow screens: the level header sits on top of the card, not beside it.
+    pub stacked: bool,
+    /// One card per level, top to bottom.
     pub bands: Vec<Band>,
-    /// Bounding box of the whole house: (min x, min y, max x, max y).
+    /// One tile per visible topic.
+    pub tiles: Vec<Band>,
+    /// Bounding box of the page, header included: (min x, min y, max x, max y).
     pub bbox: (f64, f64, f64, f64),
 }
 
-/// Lay out the visible part of a root → floors → rooms → rules tree as a
-/// house. `label_w[i]` is the width of node `i`'s label.
-pub fn layout_floors(nodes: &[LayoutNode], label_w: &[f64], root: usize) -> Floors {
+/// Rows per column so that the rule columns fit `inner` width.
+fn rule_columns(rules: &[usize], label_w: &[f64], inner: f64) -> (usize, Vec<f64>) {
+    let mut rows = MAX_ROWS.min(rules.len().max(1));
+    loop {
+        let widths: Vec<f64> = rules
+            .chunks(rows)
+            .map(|col| BULLET_W + col.iter().map(|&c| label_w[c]).fold(0.0, f64::max))
+            .collect();
+        let total = widths.iter().sum::<f64>() + RULE_COL_GAP * widths.len().saturating_sub(1) as f64;
+        if total <= inner || rows >= rules.len() {
+            return (rows, widths);
+        }
+        rows += 1;
+    }
+}
+
+/// Lays out the visible part of a root → levels → topics → rules tree as
+/// cards. `label_w[i]` is the width of node `i`'s label; `avail` is the width
+/// the page has (CSS px), which decides the number of tile columns and, below
+/// 640 px, puts each level's header on top of its card.
+pub fn layout_floors(nodes: &[LayoutNode], label_w: &[f64], root: usize, avail: f64) -> Floors {
     let mut placed = vec![Placed::default(); nodes.len()];
     let mut bands = Vec::new();
+    let mut tiles = Vec::new();
     if nodes.is_empty() {
-        return Floors { placed, bands, bbox: (0.0, 0.0, 0.0, 0.0) };
+        return Floors { placed, stacked: false, bands, tiles, bbox: (0.0, 0.0, 0.0, 0.0) };
     }
     let floors: &[usize] = if nodes[root].expanded { &nodes[root].children } else { &[] };
 
-    // Pass 1: lay out each floor in its own coordinates (origin = top-left).
-    struct Local {
-        w: f64,
-        h: f64,
-        items: Vec<(usize, f64, f64, usize)>, // node, x, y, depth
-    }
-    let mut locals = Vec::with_capacity(floors.len());
-    for &f in floors {
-        let mut items = vec![(f, PAD + 14.0, TITLE_H / 2.0, 1)];
-        let mut w = PAD + 14.0 + DOT + label_w[f] + COUNT_W + PAD;
-        let mut h = TITLE_H;
-        if nodes[f].expanded && !nodes[f].children.is_empty() {
-            let mut x = PAD;
-            let mut y = TITLE_H;
-            let mut row_h: f64 = 0.0;
-            for &r in &nodes[f].children {
-                let kids: &[usize] = if nodes[r].expanded { &nodes[r].children } else { &[] };
-                let col_w: Vec<f64> = kids
-                    .chunks(MAX_ROWS)
-                    .map(|col| DOT + col.iter().map(|&c| label_w[c]).fold(0.0, f64::max))
-                    .collect();
-                let body_w = col_w.iter().sum::<f64>() + COL_GAP * col_w.len().saturating_sub(1) as f64;
-                let room_w = (DOT + label_w[r] + COUNT_W).max(body_w);
-                let rows = kids.len().min(MAX_ROWS);
-                let room_h = HEAD_H + if rows > 0 { rows as f64 * ROW + 6.0 } else { 0.0 };
-                if x > PAD && x + room_w > MAX_ROW_W {
-                    x = PAD;
-                    y += row_h + 12.0;
-                    row_h = 0.0;
-                }
-                items.push((r, x + 8.0, y + HEAD_H / 2.0, 2));
-                let mut cx = x;
-                for (ci, col) in kids.chunks(MAX_ROWS).enumerate() {
-                    for (ri, &c) in col.iter().enumerate() {
-                        items.push((c, cx + 8.0, y + HEAD_H + ri as f64 * ROW + ROW / 2.0, 3));
-                    }
-                    cx += col_w[ci] + COL_GAP;
-                }
-                row_h = row_h.max(room_h);
-                w = w.max(x + room_w + PAD);
-                x += room_w + ROOM_GAP;
-            }
-            h = y + row_h + PAD;
-        }
-        locals.push(Local { w, h, items });
-    }
+    // Every tile has the same width: wide enough for the longest topic title.
+    let longest = floors
+        .iter()
+        .flat_map(|&f| nodes[f].children.iter())
+        .map(|&r| label_w[r])
+        .fold(0.0, f64::max);
+    let tile_w = (16.0 + longest + 12.0 + TILE_TAIL).max(MIN_TILE_W);
+    let stacked = avail < 640.0;
+    let side = if stacked { 0.0 } else { BADGE_W };
+    let fit = ((avail - side - 2.0 * CARD_PAD + TILE_GAP) / (tile_w + TILE_GAP)).floor() as usize;
+    let cols = fit.clamp(1, COLS);
+    let inner = cols as f64 * tile_w + (cols - 1) as f64 * TILE_GAP;
+    let card_w = side + CARD_PAD + inner + CARD_PAD;
+    let left = -card_w / 2.0;
+    let body_x = left + side + CARD_PAD;
 
-    // Pass 2: stack the floors upwards from y = 0, all with the same width.
-    let width = locals.iter().map(|l| l.w).fold(MIN_W, f64::max);
-    let left = -width / 2.0;
-    let mut bottom = 0.0;
-    let mut top = 0.0;
-    for (k, &f) in floors.iter().enumerate() {
-        let l = &locals[k];
-        top = bottom - l.h;
-        bands.push(Band { node: f, x: left, y: top, w: width, h: l.h });
-        for &(i, x, y, depth) in &l.items {
-            placed[i] = Placed { visible: true, depth, angle: 0.0, radius: 0.0, x: left + x, y: top + y };
+    placed[root] = Placed { visible: true, depth: 0, angle: 0.0, radius: 0.0, x: left, y: 0.0 };
+    let mut y = HEADER_H;
+    for &f in floors {
+        let top = y;
+        placed[f] = Placed { visible: true, depth: 1, angle: 0.0, radius: 0.0, x: left + 24.0, y: top + 36.0 };
+        let mut h = FOLDED_H;
+        if nodes[f].expanded {
+            let mut cy = top + if stacked { FOLDED_H } else { CARD_PAD };
+            let mut col = 0usize;
+            for &r in &nodes[f].children {
+                let open = nodes[r].expanded && !nodes[r].children.is_empty();
+                if open {
+                    if col > 0 {
+                        cy += TILE_H + TILE_GAP;
+                        col = 0;
+                    }
+                    let (rows, widths) = rule_columns(&nodes[r].children, label_w, inner - 32.0);
+                    let shown = nodes[r].children.len().min(rows);
+                    let th = TILE_H + shown as f64 * RULE_ROW + 12.0;
+                    tiles.push(Band { node: r, x: body_x, y: cy, w: inner, h: th });
+                    placed[r] = Placed { visible: true, depth: 2, angle: 0.0, radius: 0.0, x: body_x + 16.0, y: cy + TILE_H / 2.0 };
+                    let mut cx = body_x + 16.0;
+                    for (ci, column) in nodes[r].children.chunks(rows).enumerate() {
+                        for (ri, &c) in column.iter().enumerate() {
+                            let ry = cy + TILE_H + 6.0 + ri as f64 * RULE_ROW + RULE_ROW / 2.0;
+                            placed[c] = Placed { visible: true, depth: 3, angle: 0.0, radius: 0.0, x: cx, y: ry };
+                        }
+                        cx += widths[ci] + RULE_COL_GAP;
+                    }
+                    cy += th + TILE_GAP;
+                } else {
+                    let tx = body_x + col as f64 * (tile_w + TILE_GAP);
+                    tiles.push(Band { node: r, x: tx, y: cy, w: tile_w, h: TILE_H });
+                    placed[r] = Placed { visible: true, depth: 2, angle: 0.0, radius: 0.0, x: tx + 16.0, y: cy + TILE_H / 2.0 };
+                    col += 1;
+                    if col == cols {
+                        col = 0;
+                        cy += TILE_H + TILE_GAP;
+                    }
+                }
+            }
+            if col > 0 {
+                cy += TILE_H + TILE_GAP;
+            }
+            let body_bottom = cy - TILE_GAP + CARD_PAD;
+            h = if stacked { body_bottom - top } else { (body_bottom - top).max(BADGE_MIN_H) };
         }
-        bottom = top - FLOOR_GAP;
+        bands.push(Band { node: f, x: left, y: top, w: card_w, h });
+        y = top + h + CARD_GAP;
     }
-    placed[root] = Placed { visible: true, depth: 0, angle: 0.0, radius: 0.0, x: 0.0, y: top - ROOF_H * 0.42 };
-    Floors { placed, bands, bbox: (left - 34.0, top - ROOF_H, -left + 34.0, 0.0) }
+    let bottom = (y - CARD_GAP).max(HEADER_H);
+    Floors { placed, stacked, bands, tiles, bbox: (left - 24.0, -24.0, -left + 24.0, bottom + 24.0) }
 }
 
 #[cfg(test)]
@@ -240,55 +271,81 @@ mod tests {
     use super::*;
 
     #[test]
-    fn floors_stack_upwards_without_overlap() {
+    fn level_cards_stack_downwards_without_overlap() {
         let mut nodes = tree(&[6, 5, 11], 0.0);
-        // Open the rooms of every other floor; fold the last floor.
         let floors = nodes[0].children.clone();
+        // Open one topic on even levels, none on odd ones; fold the last level.
         for (k, &f) in floors.iter().enumerate() {
-            for &r in &nodes[f].children.clone() {
-                nodes[r].expanded = k % 2 == 0;
+            for (j, &r) in nodes[f].children.clone().iter().enumerate() {
+                nodes[r].expanded = k % 2 == 0 && j == 1;
             }
         }
         nodes[floors[5]].expanded = false;
         let widths: Vec<f64> = (0..nodes.len()).map(|i| 60.0 + (i % 7) as f64 * 25.0).collect();
-        let out = layout_floors(&nodes, &widths, 0);
+        let out = layout_floors(&nodes, &widths, 0, 2000.0);
 
         assert_eq!(out.bands.len(), 6);
+        assert_eq!(out.bands[0].node, floors[0], "first level is the first card");
+        assert!(out.bands[0].y >= HEADER_H, "cards start below the page title");
         for w in out.bands.windows(2) {
-            assert!(w[1].y + w[1].h <= w[0].y, "floor above must end before the floor below starts");
+            assert!(w[0].y + w[0].h < w[1].y, "each card ends before the next one starts");
             assert_eq!(w[0].w, w[1].w);
         }
-        assert_eq!(out.bands[0].y + out.bands[0].h, 0.0, "ground floor sits on y = 0");
-        assert!(out.placed[0].y < out.bands[5].y, "root sits in the roof");
-
-        // Every visible node lies inside its floor's band, and no two label
-        // boxes intersect.
-        let mut boxes: Vec<(f64, f64, f64, f64)> = Vec::new();
-        for band in &out.bands {
-            let mut stack = vec![band.node];
-            while let Some(i) = stack.pop() {
-                let p = out.placed[i];
-                if !p.visible {
-                    continue;
-                }
-                let extra = if p.depth < 3 { COUNT_W } else { 0.0 };
-                let b = (p.x - 8.0, p.y - ROW / 2.0 + 1.0, p.x - 8.0 + DOT + widths[i] + extra, p.y + ROW / 2.0 - 1.0);
-                assert!(b.0 >= band.x && b.2 <= band.x + band.w, "node {i} outside band horizontally");
-                assert!(b.1 >= band.y && b.3 <= band.y + band.h, "node {i} outside band vertically");
-                boxes.push(b);
-                stack.extend(nodes[i].children.iter().copied());
-            }
-        }
-        for a in 0..boxes.len() {
-            for b in (a + 1)..boxes.len() {
-                let (p, q) = (boxes[a], boxes[b]);
-                let apart = p.2 <= q.0 || q.2 <= p.0 || p.3 <= q.1 || q.3 <= p.1;
-                assert!(apart, "labels overlap: {p:?} {q:?}");
-            }
-        }
-        // The folded floor shows no rooms.
+        assert_eq!(out.bands[5].h, FOLDED_H, "a folded level is one row");
         for &r in &nodes[floors[5]].children {
-            assert!(!out.placed[r].visible);
+            assert!(!out.placed[r].visible, "a folded level hides its topics");
+        }
+
+        // Tiles sit inside their card's body and never overlap.
+        let card_of = |t: &Band| out.bands.iter().find(|b| nodes[b.node].children.contains(&t.node)).unwrap();
+        for (i, a) in out.tiles.iter().enumerate() {
+            let c = card_of(a);
+            assert!(a.x >= c.x + BADGE_W && a.x + a.w <= c.x + c.w + 0.01, "tile outside its card horizontally");
+            assert!(a.y >= c.y && a.y + a.h <= c.y + c.h + 0.01, "tile outside its card vertically");
+            assert!(widths[a.node] + 28.0 + TILE_TAIL <= a.w + 0.01, "topic title does not fit its tile");
+            for b in &out.tiles[i + 1..] {
+                let apart = a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y;
+                assert!(apart, "tiles overlap: {a:?} {b:?}");
+            }
+        }
+
+        // Rules of an open topic sit inside its tile, below the header, and fit.
+        check_rules(&nodes, &out, &widths);
+    }
+
+    #[test]
+    fn narrow_screens_stack_the_level_header() {
+        let mut nodes = tree(&[6, 5, 11], 0.0);
+        let first = nodes[0].children[0];
+        let topic = nodes[first].children[2];
+        nodes[topic].expanded = true;
+        for f in nodes[0].children.clone() {
+            for r in nodes[f].children.clone() {
+                if r != topic {
+                    nodes[r].expanded = false;
+                }
+            }
+        }
+        let widths: Vec<f64> = (0..nodes.len()).map(|i| 40.0 + (i % 5) as f64 * 20.0).collect();
+        let out = layout_floors(&nodes, &widths, 0, 360.0);
+        assert!(out.stacked);
+        let card = out.bands[0];
+        assert!(card.w <= 360.0, "a card fits a phone screen: {}", card.w);
+        for t in out.tiles.iter().filter(|t| nodes[card.node].children.contains(&t.node)) {
+            assert!(t.y >= card.y + FOLDED_H, "tiles sit below the level header");
+            assert!(t.x + t.w <= card.x + card.w + 0.01);
+        }
+        check_rules(&nodes, &out, &widths);
+    }
+
+    fn check_rules(nodes: &[LayoutNode], out: &Floors, widths: &[f64]) {
+        for t in out.tiles.iter().filter(|t| nodes[t.node].expanded) {
+            for &c in &nodes[t.node].children {
+                let p = out.placed[c];
+                assert!(p.visible);
+                assert!(p.y - RULE_ROW / 2.0 >= t.y + TILE_H && p.y + RULE_ROW / 2.0 <= t.y + t.h + 0.01);
+                assert!(p.x + BULLET_W + widths[c] <= t.x + t.w + 0.01, "rule label overflows its tile");
+            }
         }
     }
 

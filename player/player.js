@@ -4,9 +4,11 @@
 import init, { PlayerDictionary, parse_dual_srt } from '../pkg/turkish_grammar_map.js';
 import { setupAutoSubs } from './autosubs.js';
 import { AudioVisual } from './visual.js';
+import { Drawer, Modal, Materialise, trackHudHeight } from '../ui.js';
 
 const $ = (id) => document.getElementById(id);
 const VOCAB_KEY = 'trlearn.vocabulary';
+const AUTOSAVE_KEY = 'trlearn.autosave';
 const SAMPLE = { video: 'samples/sample_video.mp4', tr: 'samples/sample_tr.srt', en: 'samples/sample_en.srt' };
 
 // ───────────────────────────── helpers ─────────────────────────────
@@ -139,6 +141,11 @@ const state = {
 };
 if (!Array.isArray(state.words)) state.words = [];
 
+const wordsDrawer = new Drawer($('words'), { side: 'right', button: $('btn-words'), initialFocus: () => $('words-close') });
+const modals = { 'open-dialog': new Modal($('open-dialog')), 'auto-dialog': new Modal($('auto-dialog')) };
+const lookupPop = new Materialise($('lookup'));
+const narrowLayout = matchMedia('(max-width: 960px)');
+
 const visual = new AudioVisual({
   live: $('viz'),
   note: $('viz-note'),
@@ -185,6 +192,10 @@ async function openMedia(source) {
     $('yt-holder').hidden = true;
     video.hidden = false;
     video.removeAttribute('data-audio');
+    if (!video.dataset.visualHooks) {
+      video.dataset.visualHooks = '1';
+      for (const ev of ['play', 'pause', 'seeked', 'seeking', 'timeupdate']) video.addEventListener(ev, () => visual.wake());
+    }
     video.src = source.kind === 'file' ? URL.createObjectURL(source.file) : source.url;
     state.media = new Html5Media(video);
     await new Promise((resolve, reject) => {
@@ -367,6 +378,11 @@ function tick() {
     state.replayStop = null;
     state.media.pause();
   }
+  // The word card belongs to the paused moment: once playback resumes (Space,
+  // the play button, YouTube's controls…), it goes away.
+  if (state.media && !state.media.paused() && !$('lookup').hidden && $('lookup').dataset.closing !== '1') {
+    closeLookup();
+  }
 }
 
 function step(dir) {
@@ -399,13 +415,12 @@ async function lookUp(token, cue, button) {
   state.media?.pause();
   document.querySelectorAll('.word.active').forEach((w) => w.classList.remove('active'));
   button?.classList.add('active');
-  const card = $('lookup');
   $('lookup-word').textContent = word;
   $('lookup-meaning').textContent = 'Looking up…';
   $('lookup-meaning').classList.remove('missing');
   $('lookup-note').textContent = '';
   $('lookup-save').hidden = true;
-  card.hidden = false;
+  showLookupCard(button);
 
   let found = null;
   try {
@@ -425,7 +440,6 @@ async function lookUp(token, cue, button) {
   $('lookup-meaning').textContent = found.translation;
   $('lookup-note').textContent = found.note;
 
-  // Like the desktop app, a found word is saved straight away with its sentence.
   const entry = {
     id: `${trLower(word)}-${Math.round(cue.start * 1000)}`,
     target_word: word,
@@ -436,19 +450,62 @@ async function lookUp(token, cue, button) {
     word_note: found.note,
     source_media: state.source?.key || '',
   };
-  const existing = state.words.findIndex((w) => trLower(w.target_word) === trLower(word) && w.target_sentence === cue.tr);
-  if (existing >= 0) state.words[existing] = entry; else state.words.push(entry);
+  state.lastLookup = { entry, button };
+  // Saving is the learner's choice; the desktop app's save-on-click is a setting.
+  if (autoSave() && savedIndex(entry) < 0) storeWord(entry);
+  updateSaveButton();
+}
+
+function savedIndex(entry) {
+  return state.words.findIndex((w) => trLower(w.target_word) === trLower(entry.target_word) && w.target_sentence === entry.target_sentence);
+}
+
+function storeWord(entry) {
+  const i = savedIndex(entry);
+  if (i >= 0) state.words[i] = entry; else state.words.push(entry);
   saveWords();
-  button?.classList.add('saved');
-  state.lastLookup = entry;
+  renderStage(state.active);
+}
+
+function updateSaveButton() {
   const save = $('lookup-save');
-  save.hidden = false;
-  save.textContent = 'Remove from saved';
-  save.classList.remove('primary');
+  const last = state.lastLookup;
+  save.hidden = !last;
+  if (!last) return;
+  const saved = savedIndex(last.entry) >= 0;
+  save.textContent = saved ? 'Saved ✓' : 'Save word';
+  save.classList.toggle('primary', !saved);
+  save.setAttribute('aria-pressed', String(saved));
+  save.title = saved ? 'Click to remove it from your saved words' : 'Add this word and its sentence to your saved words';
+}
+
+function autoSave() {
+  try { return localStorage.getItem(AUTOSAVE_KEY) === '1'; } catch { return false; }
+}
+
+/** Shows the word card growing out of the clicked word. */
+function showLookupCard(button) {
+  const card = $('lookup');
+  card.hidden = false;
+  if (narrowLayout.matches || !button) {
+    card.style.left = '';
+    card.style.top = '';
+    lookupPop.show('50% 100%');
+    return;
+  }
+  const stage = card.offsetParent.getBoundingClientRect();
+  const b = button.getBoundingClientRect();
+  const w = card.offsetWidth;
+  const centre = b.left + b.width / 2 - stage.left;
+  const left = Math.max(0, Math.min(stage.width - w, centre - w / 2));
+  card.style.left = `${left}px`;
+  card.style.top = `${b.bottom - stage.top + 10}px`;
+  card.style.setProperty('--arrow-x', `${centre - left}px`);
+  lookupPop.show(`${centre - left}px 0px`);
 }
 
 function closeLookup() {
-  $('lookup').hidden = true;
+  if (!$('lookup').hidden) lookupPop.hide();
   document.querySelectorAll('.word.active').forEach((w) => w.classList.remove('active'));
 }
 
@@ -520,11 +577,7 @@ function renderWords() {
 }
 
 function setWordsOpen(open) {
-  const d = $('words');
-  d.classList.toggle('open', open);
-  d.setAttribute('aria-hidden', String(!open));
-  $('btn-words').setAttribute('aria-expanded', String(open));
-  document.body.classList.toggle('drawer-open', open);
+  if (open) wordsDrawer.open(); else wordsDrawer.close();
 }
 
 function importWords(text) {
@@ -567,8 +620,8 @@ function shareUrl() {
 
 // ───────────────────────────── open dialog ─────────────────────────────
 
-function openModal(id) { $(id).hidden = false; $(id).querySelector('input, select, button.primary')?.focus(); }
-function closeModal(id) { $(id).hidden = true; }
+function openModal(id) { modals[id].open(); }
+function closeModal(id) { modals[id].close(); }
 
 function bindFileName(inputId, labelId) {
   $(inputId).addEventListener('change', () => { $(labelId).textContent = $(inputId).files[0]?.name || ''; });
@@ -613,13 +666,21 @@ function bind() {
   $('btn-open').addEventListener('click', () => openModal('open-dialog'));
   $('btn-open-2').addEventListener('click', () => openModal('open-dialog'));
   $('btn-sample').addEventListener('click', () => openSample());
-  $('btn-words').addEventListener('click', () => setWordsOpen(!$('words').classList.contains('open')));
+  $('btn-words').addEventListener('click', () => setWordsOpen(!wordsDrawer.isOpen));
+  $('autosave').checked = autoSave();
+  $('autosave').addEventListener('change', (e) => {
+    try { localStorage.setItem(AUTOSAVE_KEY, e.target.checked ? '1' : '0'); } catch { /* storage blocked */ }
+  });
   $('words-close').addEventListener('click', () => setWordsOpen(false));
   $('lookup-close').addEventListener('click', closeLookup);
   $('lookup-resume').addEventListener('click', () => { closeLookup(); state.media?.play(); });
   $('lookup-save').addEventListener('click', () => {
-    if (state.lastLookup) { removeWord(state.lastLookup.id); state.lastLookup = null; }
-    closeLookup();
+    const last = state.lastLookup;
+    if (!last) return;
+    const i = savedIndex(last.entry);
+    if (i >= 0) removeWord(state.words[i].id);
+    else { storeWord(last.entry); toast(`Saved “${last.entry.target_word}”.`); }
+    updateSaveButton();
   });
   $('btn-share').addEventListener('click', async () => {
     const url = shareUrl();
@@ -645,10 +706,10 @@ function bind() {
   window.addEventListener('keydown', (e) => {
     const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement;
     if (e.key === 'Escape') {
-      const modal = [...document.querySelectorAll('.modal')].find((m) => !m.hidden);
-      if (modal) return closeModal(modal.id);
+      const modal = Object.entries(modals).find(([, m]) => m.isOpen);
+      if (modal) return closeModal(modal[0]);
       if (!$('lookup').hidden) return closeLookup();
-      if ($('words').classList.contains('open')) return setWordsOpen(false);
+      if (wordsDrawer.isOpen) return setWordsOpen(false);
       return;
     }
     if (typing || e.ctrlKey || e.metaKey || e.altKey) return;
@@ -667,7 +728,7 @@ function bind() {
       case 'ArrowUp': e.preventDefault(); step(-1); break;
       case 'ArrowDown': e.preventDefault(); step(1); break;
       case 'o': case 'O': openModal('open-dialog'); break;
-      case 'w': case 'W': setWordsOpen(!$('words').classList.contains('open')); break;
+      case 'w': case 'W': setWordsOpen(!wordsDrawer.isOpen); break;
       default: return;
     }
   });
@@ -709,6 +770,7 @@ async function main() {
   }
   bind();
   bindOpenDialog();
+  trackHudHeight();
   renderWords();
   updateButtons();
   setupAutoSubs({
@@ -717,6 +779,7 @@ async function main() {
     setCues,
     toast,
     download,
+    openModal,
     onSubLinksCleared: () => { state.subLinks = { tr: '', en: '' }; },
   });
   // A timer rather than requestAnimationFrame, so subtitles keep up even
