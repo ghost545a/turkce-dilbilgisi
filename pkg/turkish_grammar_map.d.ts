@@ -54,14 +54,37 @@ export class App {
 /**
  * Frequency dictionary lookup. `kind` is "verbs" or "adjectives"; returns
  * JSON `{kind, total, items}` with the matching entries, most common first.
+ * Turkish-English dictionary for the `/player/` page, built from the TSV the
+ * page fetches (`player/tr_en_dictionary.tsv`).
  */
+export class PlayerDictionary {
+    free(): void;
+    [Symbol.dispose](): void;
+    /**
+     * JSON `{word, translation, note}` for a clicked word, or `null`.
+     */
+    lookup(word: string): string;
+    constructor(tsv: string);
+    /**
+     * Number of entries loaded.
+     */
+    size(): number;
+}
+
 export function dict_search(kind: string, query: string): string;
+
+/**
+ * Parses a Turkish and an (optional) English subtitle file and pairs them.
+ * Returns JSON `{ok, error, cues: [{id, start, end, tr, en}], warnings}`.
+ */
+export function parse_dual_srt(turkish: string, english: string): string;
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly __wbg_app_free: (a: number, b: number) => void;
+    readonly __wbg_playerdictionary_free: (a: number, b: number) => void;
     readonly app_clear_selection: (a: number) => void;
     readonly app_collapse_all: (a: number) => void;
     readonly app_dblclick: (a: number, b: number, c: number) => void;
@@ -84,6 +107,10 @@ export interface InitOutput {
     readonly app_start: (a: number) => [number, number];
     readonly app_wheel: (a: number, b: number, c: number, d: number) => void;
     readonly dict_search: (a: number, b: number, c: number, d: number) => [number, number];
+    readonly parse_dual_srt: (a: number, b: number, c: number, d: number) => [number, number];
+    readonly playerdictionary_lookup: (a: number, b: number, c: number) => [number, number];
+    readonly playerdictionary_new: (a: number, b: number) => number;
+    readonly playerdictionary_size: (a: number) => number;
     readonly wasm_bindgen_221b4da4ce97537e___convert__closures_____invoke___f64______true_: (a: number, b: number, c: number) => void;
     readonly __wbindgen_exn_store: (a: number) => void;
     readonly __externref_table_alloc: () => number;

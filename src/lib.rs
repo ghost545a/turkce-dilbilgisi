@@ -8,6 +8,7 @@
 pub mod dictionary;
 pub mod grammar_data;
 pub mod layout;
+pub mod player;
 
 use std::cell::RefCell;
 use std::f64::consts::{PI, TAU};
@@ -1385,6 +1386,38 @@ impl App {
 
 /// Frequency dictionary lookup. `kind` is "verbs" or "adjectives"; returns
 /// JSON `{kind, total, items}` with the matching entries, most common first.
+/// Turkish-English dictionary for the `/player/` page, built from the TSV the
+/// page fetches (`player/tr_en_dictionary.tsv`).
+#[wasm_bindgen]
+pub struct PlayerDictionary {
+    inner: player::lookup::Dictionary,
+}
+
+#[wasm_bindgen]
+impl PlayerDictionary {
+    #[wasm_bindgen(constructor)]
+    pub fn new(tsv: &str) -> PlayerDictionary {
+        PlayerDictionary { inner: player::lookup::Dictionary::from_tsv(tsv) }
+    }
+
+    /// Number of entries loaded.
+    pub fn size(&self) -> usize {
+        self.inner.len()
+    }
+
+    /// JSON `{word, translation, note}` for a clicked word, or `null`.
+    pub fn lookup(&self, word: &str) -> String {
+        self.inner.lookup_json(word)
+    }
+}
+
+/// Parses a Turkish and an (optional) English subtitle file and pairs them.
+/// Returns JSON `{ok, error, cues: [{id, start, end, tr, en}], warnings}`.
+#[wasm_bindgen]
+pub fn parse_dual_srt(turkish: &str, english: &str) -> String {
+    player::srt::parse_dual_json(turkish, english)
+}
+
 #[wasm_bindgen]
 pub fn dict_search(kind: &str, query: &str) -> String {
     dictionary::search(kind, query)

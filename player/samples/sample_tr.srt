@@ -1,0 +1,15 @@
+1
+00:00:00,500 --> 00:00:03,200
+Merhaba, benim adım Ayşe.
+
+2
+00:00:03,500 --> 00:00:06,800
+Bugün hava çok güzel.
+
+3
+00:00:07,000 --> 00:00:10,400
+Kahve içmek ister misin?
+
+4
+00:00:10,800 --> 00:00:14,000
+Evet, teşekkür ederim!

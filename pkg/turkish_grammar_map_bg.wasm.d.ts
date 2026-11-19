@@ -2,6 +2,7 @@
 /* eslint-disable */
 export const memory: WebAssembly.Memory;
 export const __wbg_app_free: (a: number, b: number) => void;
+export const __wbg_playerdictionary_free: (a: number, b: number) => void;
 export const app_clear_selection: (a: number) => void;
 export const app_collapse_all: (a: number) => void;
 export const app_dblclick: (a: number, b: number, c: number) => void;
@@ -24,6 +25,10 @@ export const app_set_reduced_motion: (a: number, b: number) => void;
 export const app_start: (a: number) => [number, number];
 export const app_wheel: (a: number, b: number, c: number, d: number) => void;
 export const dict_search: (a: number, b: number, c: number, d: number) => [number, number];
+export const parse_dual_srt: (a: number, b: number, c: number, d: number) => [number, number];
+export const playerdictionary_lookup: (a: number, b: number, c: number) => [number, number];
+export const playerdictionary_new: (a: number, b: number) => number;
+export const playerdictionary_size: (a: number) => number;
 export const wasm_bindgen_221b4da4ce97537e___convert__closures_____invoke___f64______true_: (a: number, b: number, c: number) => void;
 export const __wbindgen_exn_store: (a: number) => void;
 export const __externref_table_alloc: () => number;

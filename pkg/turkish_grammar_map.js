@@ -188,6 +188,62 @@ if (Symbol.dispose) App.prototype[Symbol.dispose] = App.prototype.free;
 /**
  * Frequency dictionary lookup. `kind` is "verbs" or "adjectives"; returns
  * JSON `{kind, total, items}` with the matching entries, most common first.
+ * Turkish-English dictionary for the `/player/` page, built from the TSV the
+ * page fetches (`player/tr_en_dictionary.tsv`).
+ */
+export class PlayerDictionary {
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        PlayerDictionaryFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_playerdictionary_free(ptr, 0);
+    }
+    /**
+     * JSON `{word, translation, note}` for a clicked word, or `null`.
+     * @param {string} word
+     * @returns {string}
+     */
+    lookup(word) {
+        let deferred2_0;
+        let deferred2_1;
+        try {
+            const ptr0 = passStringToWasm0(word, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.playerdictionary_lookup(this.__wbg_ptr, ptr0, len0);
+            deferred2_0 = ret[0];
+            deferred2_1 = ret[1];
+            return getStringFromWasm0(ret[0], ret[1]);
+        } finally {
+            wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+        }
+    }
+    /**
+     * @param {string} tsv
+     */
+    constructor(tsv) {
+        const ptr0 = passStringToWasm0(tsv, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.playerdictionary_new(ptr0, len0);
+        this.__wbg_ptr = ret;
+        PlayerDictionaryFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+    /**
+     * Number of entries loaded.
+     * @returns {number}
+     */
+    size() {
+        const ret = wasm.playerdictionary_size(this.__wbg_ptr);
+        return ret >>> 0;
+    }
+}
+if (Symbol.dispose) PlayerDictionary.prototype[Symbol.dispose] = PlayerDictionary.prototype.free;
+
+/**
  * @param {string} kind
  * @param {string} query
  * @returns {string}
@@ -208,6 +264,37 @@ export function dict_search(kind, query) {
             throw e;
         }
         const ret = wasm.dict_search(ptr0, len0, ptr1, len1);
+        deferred3_0 = ret[0];
+        deferred3_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
+ * Parses a Turkish and an (optional) English subtitle file and pairs them.
+ * Returns JSON `{ok, error, cues: [{id, start, end, tr, en}], warnings}`.
+ * @param {string} turkish
+ * @param {string} english
+ * @returns {string}
+ */
+export function parse_dual_srt(turkish, english) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        let ptr0, len0, ptr1, len1;
+        try {
+            ptr0 = passStringToWasm0(turkish, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            len0 = WASM_VECTOR_LEN;
+            ptr1 = passStringToWasm0(english, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            len1 = WASM_VECTOR_LEN;
+        } catch (e) {
+            if (ptr1) { wasm.__wbindgen_free(ptr1, len1 * 1, 1); }
+            if (ptr0) { wasm.__wbindgen_free(ptr0, len0 * 1, 1); }
+            throw e;
+        }
+        const ret = wasm.parse_dual_srt(ptr0, len0, ptr1, len1);
         deferred3_0 = ret[0];
         deferred3_1 = ret[1];
         return getStringFromWasm0(ret[0], ret[1]);
@@ -385,7 +472,7 @@ function __wbg_get_imports() {
             return ret;
         },
         __wbindgen_generic_0000000000000001: function(arg0, arg1) {
-            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [F64], shim_idx: 3, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
+            // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [F64], shim_idx: 6, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
             const ret = makeMutClosure(arg0, arg1, wasm_bindgen_221b4da4ce97537e___convert__closures_____invoke___f64______true_);
             return ret;
         },
@@ -416,6 +503,9 @@ function wasm_bindgen_221b4da4ce97537e___convert__closures_____invoke___f64_____
 const AppFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_app_free(ptr, 1));
+const PlayerDictionaryFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_playerdictionary_free(ptr, 1));
 
 function addToExternrefTable0(obj) {
     const idx = wasm.__externref_table_alloc();

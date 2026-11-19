@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0D0D12">
+  <title>Türkçe Dilbilgisi — Player</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../styles.css">
+  <link rel="stylesheet" href="player.css">
+</head>
+<body class="player-page" data-view="player">
+  <header class="hud">
+    <div class="brand">
+      <span class="brand-dot" aria-hidden="true"></span>
+      <span class="brand-name">Türkçe Dilbilgisi</span>
+      <nav class="views" aria-label="Views">
+        <a href="../main/">Map</a>
+        <a href="../by-level/">By Level <sup>BETA</sup></a>
+        <a href="../player/" aria-current="page">Player <sup>BETA</sup></a>
+      </nav>
+    </div>
+    <div class="actions">
+      <button id="btn-open" type="button" title="Open a lesson (O)">Open</button>
+      <button id="btn-auto" type="button" title="Create subtitles automatically">Auto subtitles</button>
+      <button id="btn-share" type="button" title="Copy a link to this lesson">Copy link</button>
+      <button id="btn-words" type="button" class="accent" title="Saved words (W)" aria-expanded="false" aria-controls="words">Saved words <span id="words-count" class="count">0</span></button>
+    </div>
+  </header>
+
+  <main class="player-layout">
+    <section class="stage" aria-label="Player">
+      <div id="media-box" class="media-box">
+        <div id="empty" class="empty">
+          <h1>Learn Turkish from any video</h1>
+          <p>Paste a video link, add Turkish and English subtitles, then click any Turkish word to see what it means.</p>
+          <div class="empty-actions">
+            <button id="btn-open-2" type="button" class="primary">Open a lesson</button>
+            <button id="btn-sample" type="button">Try the sample</button>
+          </div>
+        </div>
+        <canvas id="viz" class="viz" hidden aria-hidden="true"></canvas>
+        <p id="viz-note" class="viz-note" hidden></p>
+        <video id="video" playsinline controls hidden></video>
+        <div id="yt-holder" class="yt-holder" hidden><div id="yt"></div></div>
+      </div>
+
+      <div id="wave" class="wave" hidden tabindex="0" role="slider" aria-label="Audio position — click or drag to jump" aria-valuemin="0">
+        <canvas id="wave-canvas"></canvas>
+        <span id="wave-tip" class="wave-tip" hidden></span>
+      </div>
+
+      <div id="subs" class="subs" aria-live="off">
+        <p id="sub-tr" class="sub-tr" lang="tr"></p>
+        <p id="sub-en" class="sub-en"></p>
+      </div>
+
+      <div id="lookup" class="lookup" hidden role="dialog" aria-label="Word meaning">
+        <button id="lookup-close" class="inspector-close" type="button" aria-label="Close">×</button>
+        <div class="lookup-word" id="lookup-word" lang="tr"></div>
+        <div class="lookup-meaning" id="lookup-meaning"></div>
+        <div class="lookup-note" id="lookup-note"></div>
+        <div class="lookup-actions">
+          <button id="lookup-save" type="button" class="primary">Save word</button>
+          <button id="lookup-resume" type="button">Continue</button>
+        </div>
+      </div>
+
+      <p class="keys"><b>Space</b> play / pause · <b>← →</b> 5 s · <b>↑ ↓</b> previous / next line · <b>Esc</b> close</p>
+    </section>
+
+    <aside class="transcript" aria-label="Transcript">
+      <div class="transcript-head">
+        <h2>Transcript</h2>
+        <span id="lesson-name" class="lesson-name"></span>
+      </div>
+      <ol id="transcript" class="transcript-list"></ol>
+      <p id="transcript-empty" class="transcript-empty">The lines of the lesson appear here. Click a line to jump to it.</p>
+    </aside>
+  </main>
+
+  <!-- Open a lesson -->
+  <div id="open-dialog" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="open-title">
+    <form id="open-form" class="modal-card">
+      <button type="button" class="inspector-close" data-close aria-label="Close">×</button>
+      <h2 id="open-title">Open a lesson</h2>
+
+      <fieldset>
+        <legend>Video</legend>
+        <label class="field">
+          <span>Link (YouTube or a direct .mp4 / .webm / .mp3 file)</span>
+          <input id="in-video" type="url" placeholder="https://www.youtube.com/watch?v=…" autocomplete="off" spellcheck="false">
+        </label>
+        <div class="or">or</div>
+        <label class="file">
+          <input id="in-video-file" type="file" accept="video/*,audio/*">
+          <span>Choose a file from this device</span>
+          <em id="in-video-file-name"></em>
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Subtitles <small>(.srt or .vtt — optional if you will use Auto subtitles)</small></legend>
+        <div class="two">
+          <div>
+            <label class="field"><span>Turkish — link</span><input id="in-tr" type="url" placeholder="https://…/lesson_tr.srt" autocomplete="off" spellcheck="false"></label>
+            <label class="file small"><input id="in-tr-file" type="file" accept=".srt,.vtt,text/plain"><span>or choose a file</span><em id="in-tr-file-name"></em></label>
+          </div>
+          <div>
+            <label class="field"><span>English — link</span><input id="in-en" type="url" placeholder="https://…/lesson_en.srt" autocomplete="off" spellcheck="false"></label>
+            <label class="file small"><input id="in-en-file" type="file" accept=".srt,.vtt,text/plain"><span>or choose a file</span><em id="in-en-file-name"></em></label>
+          </div>
+        </div>
+      </fieldset>
+
+      <p id="open-error" class="form-error" role="alert"></p>
+      <div class="modal-actions">
+        <button type="submit" class="primary">Open</button>
+        <button type="button" data-close>Cancel</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Automatic subtitles -->
+  <div id="auto-dialog" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="auto-title">
+    <div class="modal-card">
+      <button type="button" class="inspector-close" data-close aria-label="Close">×</button>
+      <h2 id="auto-title">Automatic subtitles <sup class="beta">BETA</sup></h2>
+      <p class="muted">Turns the Turkish speech in the open video into timed Turkish subtitles, then translates every line into English.</p>
+      <p id="auto-blocked" class="form-error" hidden></p>
+
+      <div class="segmented" role="radiogroup" aria-label="Where to run">
+        <label><input type="radio" name="auto-mode" value="device" checked><span>On this device <small>free · private</small></span></label>
+        <label><input type="radio" name="auto-mode" value="api"><span>My API key <small>faster · paid by you</small></span></label>
+      </div>
+
+      <div id="auto-device" class="auto-pane">
+        <label class="field">
+          <span>Speech model</span>
+          <select id="asr-model">
+            <option value="tiny">Tiny — fastest, least accurate (about 40–110 MB)</option>
+            <option value="base" selected>Base — balanced (about 75–195 MB)</option>
+            <option value="small">Small — most accurate, slowest (about 240–560 MB)</option>
+          </select>
+        </label>
+        <p class="muted small" id="device-info"></p>
+        <p class="muted small">Models download once from Hugging Face and are cached by the browser. Nothing you play leaves this device.</p>
+      </div>
+
+      <div id="auto-api" class="auto-pane" hidden>
+        <label class="field">
+          <span>Provider</span>
+          <select id="api-provider">
+            <option value="openai">OpenAI (whisper-1)</option>
+            <option value="groq">Groq (whisper-large-v3)</option>
+            <option value="qwen">Qwen — Alibaba Model Studio (qwen3-asr-flash)</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>API key</span>
+          <input id="api-key" type="password" autocomplete="off" spellcheck="false" placeholder="Paste your key">
+        </label>
+        <label class="field">
+          <span>Translation model <small>(change it if your account uses another)</small></span>
+          <input id="api-chat-model" type="text" autocomplete="off" spellcheck="false">
+        </label>
+        <label class="check"><input id="api-remember" type="checkbox"> Remember the key in this browser</label>
+        <p class="muted small">The key is sent only to the provider you pick, straight from your browser. The audio of the video is uploaded to that provider. <button id="api-forget" type="button" class="link">Forget saved key</button></p>
+      </div>
+
+      <div id="auto-progress" class="progress" hidden>
+        <div class="bar"><span id="auto-bar"></span></div>
+        <p id="auto-status" class="muted small" aria-live="polite"></p>
+      </div>
+
+      <div id="auto-done" class="auto-done" hidden>
+        <p id="auto-summary"></p>
+        <div class="modal-actions">
+          <button id="dl-tr" type="button">Download Turkish .srt</button>
+          <button id="dl-en" type="button">Download English .srt</button>
+        </div>
+      </div>
+
+      <p id="auto-error" class="form-error" role="alert"></p>
+      <div class="modal-actions">
+        <button id="auto-start" type="button" class="primary">Create subtitles</button>
+        <button id="auto-cancel" type="button" hidden>Cancel</button>
+        <button type="button" data-close>Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Saved words -->
+  <aside id="words" class="inspector words" aria-hidden="true" aria-label="Saved words">
+    <button id="words-close" class="inspector-close" type="button" aria-label="Close saved words">×</button>
+    <div class="words-head">
+      <h2>Kelimelerim <span>Saved words</span></h2>
+      <div class="words-tools">
+        <button id="words-export" type="button">Export</button>
+        <label class="file-button">Import<input id="words-import" type="file" accept=".json,application/json"></label>
+      </div>
+      <p class="muted small">Kept in this browser only. Export makes a <code>vocabulary.json</code> that the TRLearn desktop app also reads.</p>
+    </div>
+    <ul id="words-list" class="words-list"></ul>
+    <p id="words-empty" class="words-empty">Click a Turkish word in the subtitles, then <b>Save word</b>.</p>
+  </aside>
+
+  <div id="toast" class="toast" hidden role="status"><span id="toast-text"></span><button id="toast-action" type="button" hidden></button></div>
+
+  <footer class="credit">
+    Dictionary: English Wiktionary via <a href="https://kaikki.org/dictionary/Turkish/" target="_blank" rel="noopener">kaikki.org</a>, <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>.
+    Web version of the <a href="https://github.com/ghost545a/trlearn-player" target="_blank" rel="noopener">TRLearn desktop player</a>.
+  </footer>
+
+  <div id="status" class="status hidden"></div>
+  <script type="module" src="player.js"></script>
+</body>
+</html>

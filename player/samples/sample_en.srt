@@ -1,0 +1,15 @@
+1
+00:00:00,500 --> 00:00:03,200
+Hello, my name is Ayşe.
+
+2
+00:00:03,500 --> 00:00:06,800
+The weather is very nice today.
+
+3
+00:00:07,000 --> 00:00:10,400
+Would you like to drink coffee?
+
+4
+00:00:10,800 --> 00:00:14,000
+Yes, thank you!
